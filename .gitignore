@@ -7,3 +7,6 @@ __pycache__/
 venv/
 out/
 .DS_Store
+.env
+.env.*
+!.env.example

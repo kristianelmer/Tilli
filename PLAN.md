@@ -1176,6 +1176,15 @@ Initial validation harness status:
 - Reports classify pass, warning, and blocked outcomes.
 - Reports include public-data limitations so validation confidence is not overstated.
 
+Initial annual simulation status:
+
+- Year-end interview answer model created.
+- Shared annual data model created from posted narrow-ledger entries, documents, and confirmations.
+- Filing-specific readiness gates created for `årsregnskap` and `skattemelding for AS`.
+- `årsregnskap` simulation preview and simulated receipt created for simple holding AS.
+- `skattemelding for AS` simulation preview includes simplified `fritaksmetoden` 3% add-back and estimated tax.
+- Company archive export created with ledger entries, document index, filing previews, readiness reports, receipts, and missing-document markers.
+
 ### Phase 3: Annual Holding Compliance Simulation
 
 Deliverables:
