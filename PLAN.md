@@ -1140,11 +1140,21 @@ Initial RF-1086 prototype status:
 - `holding_cli` thin CLI created.
 - RF-1086/RF-1086-U XML generation created for no-activity, stiftelse, simple share sale, and simple dividend fixtures.
 - CLI readiness command created: `validate-case --case <fixture> [--json]`.
+- Public/synthetic validation harness command created: `validate-public-data --case <fixture> [--json]`.
 - `simulate-aksjonaerregister` now runs the filing readiness gate before writing XML.
 - Invalid cases fail cleanly before filing artifacts are generated.
+- Unsupported launch cases such as non-ordinary share classes block before XML generation.
 - Official XSD validation runs locally with `xmllint`.
 - Production API calls are not implemented.
 - Event code values for kjøp/salg/utbytte remain provisional until rettledning/code-list verification.
+
+Initial narrow-ledger prototype status:
+
+- Draft, posted, reversal, and audit-event lifecycle created.
+- Posted entries are immutable and are the filing-source entries.
+- Opening balance / new-year start structured action created.
+- Paid admin cost structured action created for launch-supported cost categories.
+- VAT deduction, unpaid supplier flows, and other operating-company cost complexity remain out of scope.
 
 ### Phase 2: Public-Data Validation Harness
 
@@ -1154,6 +1164,12 @@ Deliverables:
 - Synthetic holding-company fixtures.
 - Validation reports.
 - Mismatch classification.
+
+Initial validation harness status:
+
+- RF-1086 public/synthetic harness runs supported and blocked fixture cases.
+- Reports classify pass, warning, and blocked outcomes.
+- Reports include public-data limitations so validation confidence is not overstated.
 
 ### Phase 3: Annual Holding Compliance Simulation
 

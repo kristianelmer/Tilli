@@ -9,6 +9,7 @@ from pathlib import Path
 
 from holding_core.models import FilingCase
 from holding_core.rf1086 import filing_preview, generate_rf1086, readiness_report, write_rf1086
+from holding_core.validation import run_rf1086_validation
 
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -146,6 +147,70 @@ class Rf1086SimulationTest(unittest.TestCase):
         self.assertEqual(result.returncode, 1)
         self.assertIn("Case validation failed", result.stderr)
         self.assertNotIn("Generated", result.stdout)
+
+    def test_cli_unsupported_case_blocks_before_xml(self) -> None:
+        fixture = INVALID_FIXTURE_DIR / "unsupported_share_class.json"
+        with tempfile.TemporaryDirectory() as temp_dir:
+            result = subprocess.run(
+                [
+                    "python3",
+                    "-m",
+                    "holding_cli.main",
+                    "simulate-aksjonaerregister",
+                    "--case",
+                    str(fixture),
+                    "--out",
+                    temp_dir,
+                ],
+                cwd=ROOT,
+                text=True,
+                capture_output=True,
+                check=False,
+            )
+
+            self.assertEqual(result.returncode, 1)
+            self.assertIn("Status: blokkert", result.stdout)
+            self.assertIn("Kun ordinær aksjeklasse", result.stdout)
+            self.assertEqual(list(Path(temp_dir).glob("*.xml")), [])
+
+    def test_public_data_validation_report_classifies_pass_and_blocked_cases(self) -> None:
+        report = run_rf1086_validation(
+            [
+                FIXTURE_DIR / "no_activity.json",
+                INVALID_FIXTURE_DIR / "unsupported_share_class.json",
+                INVALID_FIXTURE_DIR / "mismatched_share_count.json",
+            ]
+        )
+
+        outcomes = {case.case_id or Path(case.case_path).name: case.outcome for case in report.cases}
+        self.assertEqual(outcomes["no_activity"], "pass")
+        self.assertEqual(outcomes["unsupported_share_class"], "blocked")
+        self.assertEqual(outcomes["mismatched_share_count.json"], "blocked")
+        self.assertIn("Public and synthetic data cannot prove voucher completeness.", report.limitations)
+
+    def test_cli_public_data_validation_json(self) -> None:
+        result = subprocess.run(
+            [
+                "python3",
+                "-m",
+                "holding_cli.main",
+                "validate-public-data",
+                "--case",
+                str(FIXTURE_DIR / "no_activity.json"),
+                "--case",
+                str(INVALID_FIXTURE_DIR / "unsupported_share_class.json"),
+                "--json",
+            ],
+            cwd=ROOT,
+            text=True,
+            capture_output=True,
+            check=False,
+        )
+
+        self.assertEqual(result.returncode, 1)
+        payload = json.loads(result.stdout)
+        self.assertEqual(payload["filing"], "aksjonærregisteroppgaven")
+        self.assertEqual([case["outcome"] for case in payload["cases"]], ["pass", "blocked"])
 
     def test_formation_allocations_are_per_shareholder(self) -> None:
         case = FilingCase.from_json_file(FIXTURE_DIR / "stiftelse_two_founders.json")

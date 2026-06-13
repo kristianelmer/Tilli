@@ -12,6 +12,7 @@ from pydantic import ValidationError
 from holding_core.models import FilingCase
 from holding_core.readiness import assess_rf1086_readiness, format_readiness_report
 from holding_core.rf1086 import filing_preview, write_rf1086
+from holding_core.validation import run_rf1086_validation
 
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -36,6 +37,13 @@ def main(argv: list[str] | None = None) -> int:
     validate_case.add_argument("--case", required=True, help="Path to JSON filing case")
     validate_case.add_argument("--json", action="store_true", help="Print machine-readable readiness JSON")
 
+    validate_public = subparsers.add_parser(
+        "validate-public-data",
+        help="Run public/synthetic validation cases through the RF-1086 simulation harness",
+    )
+    validate_public.add_argument("--case", action="append", required=True, help="Path to JSON filing case")
+    validate_public.add_argument("--json", action="store_true", help="Print machine-readable validation report")
+
     args = parser.parse_args(argv)
     if args.command == "simulate-aksjonaerregister":
         return _simulate(args.case, args.out, args.preview)
@@ -43,6 +51,8 @@ def main(argv: list[str] | None = None) -> int:
         return _validate(args.hovedskjema, args.underskjema)
     if args.command == "validate-case":
         return _validate_case(args.case, args.json)
+    if args.command == "validate-public-data":
+        return _validate_public_data(args.case, args.json)
     return 2
 
 
@@ -98,6 +108,27 @@ def _validate_case(case_path: str, as_json: bool) -> int:
     else:
         print(format_readiness_report(result), end="")
     return 0 if result.is_ready else 1
+
+
+def _validate_public_data(case_paths: list[str], as_json: bool) -> int:
+    report = run_rf1086_validation(case_paths)
+    if as_json:
+        print(json.dumps(report.model_dump(), ensure_ascii=False, indent=2))
+    else:
+        print(f"Validation report: {report.filing}")
+        print(f"Source: {report.source}")
+        print()
+        print("Limitations:")
+        for limitation in report.limitations:
+            print(f"- {limitation}")
+        print()
+        print("Cases:")
+        for case in report.cases:
+            name = case.case_id or case.case_path
+            print(f"- {name}: {case.outcome} ({case.generated_documents} document(s))")
+            for issue in case.issues:
+                print(f"  - {issue}")
+    return 1 if any(case.outcome == "blocked" for case in report.cases) else 0
 
 
 def _load_case(case_path: str) -> FilingCase | None:
