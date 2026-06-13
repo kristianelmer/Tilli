@@ -1154,6 +1154,11 @@ Initial narrow-ledger prototype status:
 - Posted entries are immutable and are the filing-source entries.
 - Opening balance / new-year start structured action created.
 - Paid admin cost structured action created for launch-supported cost categories.
+- Dividend received structured action created with `fritaksmetoden` 3% taxable add-back metadata.
+- Share purchase structured action created with investment position and cost basis.
+- Share sale structured action created with position reduction and gain/loss calculation.
+- Dividend to owner structured action created with allocation, equity, liquidity, and document checks.
+- Shareholder loan structured action created with high-risk personal-shareholder loan block.
 - VAT deduction, unpaid supplier flows, and other operating-company cost complexity remain out of scope.
 
 ### Phase 2: Public-Data Validation Harness
