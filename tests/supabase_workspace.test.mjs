@@ -10,6 +10,7 @@ import pg from "pg";
 import { buildPersistedCompanyArchive } from "../app/lib/archive.ts";
 import { assertBankTransactionMatchesCost, buildAdminCostLedgerLines, parseBankCsv } from "../app/lib/bank.ts";
 import { COMPANY_DOCUMENTS_BUCKET, documentStorageKey } from "../app/lib/documents.ts";
+import { assertNoBlockingFilingOverrides, validateFilingOverride } from "../app/lib/filing-overrides.ts";
 import { validateManualJournal } from "../app/lib/manual-journal.ts";
 import { openingBalanceLedgerLines } from "../app/lib/opening-balance.ts";
 import { buildNoActivityRf1086Case, renderRf1086PreviewWithPython } from "../app/lib/rf1086.ts";
@@ -368,6 +369,82 @@ test(
     assert.equal(filingPreview.status, "ready");
     assert.equal(filingPreview.source, "python_rf1086_engine");
 
+    const advisoryOverride = validateFilingOverride({
+      fieldTarget: "rf1086.note",
+      oldValue: "",
+      newValue: "Manuell note for myndighetsfelt",
+      reason: "Authority field not modelled yet",
+      riskLevel: "advisory",
+    });
+    const { data: persistedAdvisoryOverride, error: advisoryOverrideError } = await owner
+      .from("filing_overrides")
+      .insert({
+        preview_id: filingPreview.id,
+        company_id: companyId,
+        income_year: 2025,
+        filing: filingPreview.filing,
+        field_target: advisoryOverride.fieldTarget,
+        old_value: advisoryOverride.oldValue,
+        new_value: advisoryOverride.newValue,
+        reason: advisoryOverride.reason,
+        risk_level: advisoryOverride.riskLevel,
+        owner_confirmed_by: ownerUser.id,
+        owner_confirmed_at: new Date().toISOString(),
+        created_by: ownerUser.id,
+      })
+      .select("id, preview_id, company_id, income_year, filing, field_target, old_value, new_value, reason, risk_level, owner_confirmed_by")
+      .single();
+    assert.ifError(advisoryOverrideError);
+    assert.equal(persistedAdvisoryOverride.field_target, "rf1086.note");
+    assert.equal(persistedAdvisoryOverride.risk_level, "advisory");
+    assert.equal(persistedAdvisoryOverride.owner_confirmed_by, ownerUser.id);
+
+    const { error: advisoryOverrideAuditError } = await owner.from("audit_events").insert({
+      company_id: companyId,
+      actor_id: ownerUser.id,
+      category: "filing",
+      action: "filing_override_added",
+      message: "Filing-overstyring lagt til for rf1086.note: advisory.",
+    });
+    assert.ifError(advisoryOverrideAuditError);
+
+    const { data: reloadedOverrides, error: reloadedOverrideError } = await owner
+      .from("filing_overrides")
+      .select("id, field_target, risk_level")
+      .eq("preview_id", filingPreview.id);
+    assert.ifError(reloadedOverrideError);
+    assert.deepEqual(reloadedOverrides, [
+      {
+        id: persistedAdvisoryOverride.id,
+        field_target: "rf1086.note",
+        risk_level: "advisory",
+      },
+    ]);
+
+    const { data: outsiderOverrides, error: outsiderOverrideError } = await outsider
+      .from("filing_overrides")
+      .select("id")
+      .eq("preview_id", filingPreview.id);
+    assert.ifError(outsiderOverrideError);
+    assert.deepEqual(outsiderOverrides, []);
+
+    const { error: readOnlyOverrideError } = await readOnly.from("filing_overrides").insert({
+      preview_id: filingPreview.id,
+      company_id: companyId,
+      income_year: 2025,
+      filing: filingPreview.filing,
+      field_target: "rf1086.note",
+      old_value: "",
+      new_value: "Read-only should not write.",
+      reason: "Forbidden role.",
+      risk_level: "advisory",
+      owner_confirmed_by: readOnlyUser.id,
+      owner_confirmed_at: new Date().toISOString(),
+      created_by: readOnlyUser.id,
+    });
+    assert.ok(readOnlyOverrideError);
+    assertNoBlockingFilingOverrides([persistedAdvisoryOverride]);
+
     const simulatedSubmission = simulateRf1086SubmissionWithPython(filingPreview, ownerUser.id, {
       authorityConfirmed: true,
       previewConfirmed: true,
@@ -442,6 +519,34 @@ test(
     assert.ifError(reloadSubmissionError);
     assert.equal(reloadedSubmissions.length, 1);
     assert.equal(reloadedSubmissions[0].receipt_id, simulatedSubmission.receipt_id);
+
+    const blockingOverride = validateFilingOverride({
+      fieldTarget: "rf1086.transaction_code",
+      oldValue: "U",
+      newValue: "K",
+      reason: "Production value not verified by authority evidence.",
+      riskLevel: "block",
+    });
+    const { data: persistedBlockingOverride, error: blockingOverrideError } = await owner
+      .from("filing_overrides")
+      .insert({
+        preview_id: filingPreview.id,
+        company_id: companyId,
+        income_year: 2025,
+        filing: filingPreview.filing,
+        field_target: blockingOverride.fieldTarget,
+        old_value: blockingOverride.oldValue,
+        new_value: blockingOverride.newValue,
+        reason: blockingOverride.reason,
+        risk_level: blockingOverride.riskLevel,
+        owner_confirmed_by: ownerUser.id,
+        owner_confirmed_at: new Date().toISOString(),
+        created_by: ownerUser.id,
+      })
+      .select("risk_level, field_target")
+      .single();
+    assert.ifError(blockingOverrideError);
+    assert.throws(() => assertNoBlockingFilingOverrides([persistedBlockingOverride]), /Blokkerende filing-overstyring/);
 
     const { data: outsiderSubmissions, error: outsiderSubmissionError } = await outsider
       .from("filing_submissions")

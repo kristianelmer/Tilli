@@ -1,5 +1,6 @@
 import {
   acknowledgeFilingReviewComment,
+  addFilingOverride,
   addFilingReviewComment,
   confirmSimulatedRf1086Submission,
   createOpeningBalanceSetup,
@@ -23,6 +24,7 @@ import {
   listCompanyWorkspaces,
   listDocumentsForCompanies,
   listFilingPreviews,
+  listFilingOverrides,
   listFilingReviewComments,
   listFilingSubmissions,
   listLedgerEntries,
@@ -57,6 +59,7 @@ export default async function Home({ searchParams }: HomeProps) {
   const { setups, shareholders } = user ? await listOpeningSetups(companies.map((company) => company.id)) : { setups: [], shareholders: [] };
   const { previews } = user ? await listFilingPreviews(companies.map((company) => company.id)) : { previews: [] };
   const { submissions } = user ? await listFilingSubmissions(companies.map((company) => company.id)) : { submissions: [] };
+  const { overrides } = user ? await listFilingOverrides(companies.map((company) => company.id)) : { overrides: [] };
   const { comments } = user ? await listFilingReviewComments(companies.map((company) => company.id)) : { comments: [] };
   const { transactions } = user ? await listBankTransactions(companies.map((company) => company.id)) : { transactions: [] };
   const { entries } = user ? await listLedgerEntries(companies.map((company) => company.id)) : { entries: [] };
@@ -72,6 +75,7 @@ export default async function Home({ searchParams }: HomeProps) {
     new Set([
       ...setups.map((setup) => setup.income_year),
       ...previews.map((preview) => preview.income_year),
+      ...overrides.map((override) => override.income_year),
       ...submissions.map((submission) => submission.income_year),
       ...transactions.map((transaction) => transaction.income_year),
       ...locks.map((lock) => lock.income_year),
@@ -368,69 +372,129 @@ export default async function Home({ searchParams }: HomeProps) {
                   </button>
                 </form>
                 <div className="readinessGrid">
-                  {previews.map((preview) => (
-                    <div className="readinessItem" key={preview.id}>
-                      <span>{preview.income_year}</span>
-                      <strong data-status={preview.status}>{preview.filing}</strong>
-                      <p>Kilde: {preview.source}</p>
-                      {preview.issues.map((issue) => (
-                        <p key={issue.code}>{issue.message}</p>
-                      ))}
-                      <pre>{preview.preview}</pre>
-                      <form className="confirmationPanel" action={addFilingReviewComment}>
-                        <input name="previewId" type="hidden" value={preview.id} />
-                        <label>
-                          Alvorlighet
-                          <select name="severity" defaultValue="advisory">
-                            <option value="advisory">Advisory</option>
-                            <option value="hard_block">Hard block</option>
-                          </select>
-                        </label>
-                        <label>
-                          Kommentar
-                          <textarea name="body" placeholder="Review-kommentar" required />
-                        </label>
-                        <button className="secondaryButton" type="submit">
-                          Kommenter
-                        </button>
-                      </form>
-                      <div className="reviewList">
-                        {comments
-                          .filter((comment) => comment.preview_id === preview.id)
-                          .map((comment) => (
-                            <div className="reviewItem" key={comment.id}>
-                              <span>{comment.severity}</span>
-                              <p>{comment.body}</p>
-                              <strong>{comment.acknowledged_at ? "Acknowledged" : "Åpen"}</strong>
-                              {comment.severity === "advisory" && !comment.acknowledged_at ? (
-                                <form action={acknowledgeFilingReviewComment}>
-                                  <input name="commentId" type="hidden" value={comment.id} />
-                                  <button className="secondaryButton" type="submit">
-                                    Acknowledge
-                                  </button>
-                                </form>
-                              ) : null}
-                            </div>
+                  {previews.map((preview) => {
+                    const previewOverrides = overrides.filter(
+                      (override) =>
+                        override.preview_id === preview.id ||
+                        (override.company_id === preview.company_id &&
+                          override.income_year === preview.income_year &&
+                          override.filing === preview.filing),
+                    );
+                    const hasBlockingOverride = previewOverrides.some((override) => override.risk_level === "block");
+                    const displayStatus = hasBlockingOverride
+                      ? "blocked"
+                      : previewOverrides.length
+                        ? "warning"
+                        : preview.status;
+                    return (
+                        <div className="readinessItem" key={preview.id}>
+                          <span>{preview.income_year}</span>
+                          <strong data-status={displayStatus}>{preview.filing}</strong>
+                          <p>Kilde: {preview.source}</p>
+                          {preview.issues.map((issue) => (
+                            <p key={issue.code}>{issue.message}</p>
                           ))}
-                      </div>
-                      {preview.status === "ready" ? (
-                        <form className="confirmationPanel" action={confirmSimulatedRf1086Submission}>
-                          <input name="previewId" type="hidden" value={preview.id} />
-                          <label>
-                            <input name="authorityConfirmed" type="checkbox" required />
-                            Jeg bekrefter rett til å sende inn for selskapet.
-                          </label>
-                          <label>
-                            <input name="previewConfirmed" type="checkbox" required />
-                            Jeg har kontrollert endelig forhåndsvisning.
-                          </label>
-                          <button className="secondaryButton" type="submit">
-                            Arkiver simulert kvittering
-                          </button>
-                        </form>
-                      ) : null}
-                    </div>
-                  ))}
+                          <pre>{preview.preview}</pre>
+                          <form className="confirmationPanel" action={addFilingOverride}>
+                            <input name="previewId" type="hidden" value={preview.id} />
+                            <label>
+                              Felt
+                              <input name="fieldTarget" placeholder="authority.field" required />
+                            </label>
+                            <label>
+                              Gammel verdi
+                              <input name="oldValue" placeholder="Systemverdi" />
+                            </label>
+                            <label>
+                              Ny verdi
+                              <input name="newValue" placeholder="Overstyrt verdi" />
+                            </label>
+                            <label>
+                              Risiko
+                              <select name="riskLevel" defaultValue="advisory">
+                                <option value="advisory">Advisory</option>
+                                <option value="warning">Warning</option>
+                                <option value="block">Block</option>
+                              </select>
+                            </label>
+                            <label>
+                              Begrunnelse
+                              <textarea name="reason" placeholder="Hvorfor trengs overstyring?" required />
+                            </label>
+                            <label>
+                              <input name="ownerConfirmed" type="checkbox" required />
+                              Jeg bekrefter at overstyringen skal vises i readiness og audit trail.
+                            </label>
+                            <button className="secondaryButton" type="submit">
+                              Legg til overstyring
+                            </button>
+                          </form>
+                          <div className="reviewList">
+                            {previewOverrides.map((override) => (
+                              <div className="reviewItem" key={override.id}>
+                                <span>{override.risk_level}</span>
+                                <p>
+                                  {override.field_target}: {override.old_value || "(tom)"} -&gt; {override.new_value || "(tom)"}
+                                </p>
+                                <strong>{override.reason}</strong>
+                              </div>
+                            ))}
+                          </div>
+                          <form className="confirmationPanel" action={addFilingReviewComment}>
+                            <input name="previewId" type="hidden" value={preview.id} />
+                            <label>
+                              Alvorlighet
+                              <select name="severity" defaultValue="advisory">
+                                <option value="advisory">Advisory</option>
+                                <option value="hard_block">Hard block</option>
+                              </select>
+                            </label>
+                            <label>
+                              Kommentar
+                              <textarea name="body" placeholder="Review-kommentar" required />
+                            </label>
+                            <button className="secondaryButton" type="submit">
+                              Kommenter
+                            </button>
+                          </form>
+                          <div className="reviewList">
+                            {comments
+                              .filter((comment) => comment.preview_id === preview.id)
+                              .map((comment) => (
+                                <div className="reviewItem" key={comment.id}>
+                                  <span>{comment.severity}</span>
+                                  <p>{comment.body}</p>
+                                  <strong>{comment.acknowledged_at ? "Acknowledged" : "Åpen"}</strong>
+                                  {comment.severity === "advisory" && !comment.acknowledged_at ? (
+                                    <form action={acknowledgeFilingReviewComment}>
+                                      <input name="commentId" type="hidden" value={comment.id} />
+                                      <button className="secondaryButton" type="submit">
+                                        Acknowledge
+                                      </button>
+                                    </form>
+                                  ) : null}
+                                </div>
+                              ))}
+                          </div>
+                          {preview.status === "ready" && !hasBlockingOverride ? (
+                            <form className="confirmationPanel" action={confirmSimulatedRf1086Submission}>
+                              <input name="previewId" type="hidden" value={preview.id} />
+                              <label>
+                                <input name="authorityConfirmed" type="checkbox" required />
+                                Jeg bekrefter rett til å sende inn for selskapet.
+                              </label>
+                              <label>
+                                <input name="previewConfirmed" type="checkbox" required />
+                                Jeg har kontrollert endelig forhåndsvisning.
+                              </label>
+                              <button className="secondaryButton" type="submit">
+                                Arkiver simulert kvittering
+                              </button>
+                            </form>
+                          ) : null}
+                        </div>
+                    );
+                  })}
                   {previews.length === 0 ? (
                     <div className="readinessItem">
                       <span>RF-1086</span>

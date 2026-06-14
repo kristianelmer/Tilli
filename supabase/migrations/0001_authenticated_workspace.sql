@@ -188,6 +188,24 @@ create table if not exists public.filing_submissions (
   updated_at timestamptz not null default now()
 );
 
+create table if not exists public.filing_overrides (
+  id uuid primary key default gen_random_uuid(),
+  preview_id uuid references public.filing_previews(id) on delete cascade,
+  company_id uuid not null references public.companies(id) on delete cascade,
+  income_year integer not null check (income_year between 2000 and 2100),
+  filing text not null check (filing <> ''),
+  field_target text not null check (field_target <> ''),
+  old_value text not null default '',
+  new_value text not null default '',
+  reason text not null check (reason <> ''),
+  risk_level text not null check (risk_level in ('advisory', 'warning', 'block')),
+  owner_confirmed_by uuid not null references auth.users(id) on delete restrict,
+  owner_confirmed_at timestamptz not null,
+  created_by uuid not null references auth.users(id) on delete restrict,
+  created_at timestamptz not null default now(),
+  check (old_value <> '' or new_value <> '')
+);
+
 create table if not exists public.filing_review_comments (
   id uuid primary key default gen_random_uuid(),
   preview_id uuid not null references public.filing_previews(id) on delete cascade,
@@ -212,6 +230,8 @@ create index if not exists ledger_entries_company_id_year_idx on public.ledger_e
 create index if not exists bank_transactions_company_id_year_idx on public.bank_transactions(company_id, income_year);
 create index if not exists filing_previews_company_id_year_idx on public.filing_previews(company_id, income_year);
 create index if not exists filing_submissions_company_id_year_idx on public.filing_submissions(company_id, income_year);
+create index if not exists filing_overrides_company_id_year_idx on public.filing_overrides(company_id, income_year);
+create index if not exists filing_overrides_preview_id_idx on public.filing_overrides(preview_id);
 create index if not exists filing_review_comments_preview_id_idx on public.filing_review_comments(preview_id, created_at);
 
 alter table public.companies enable row level security;
@@ -225,6 +245,7 @@ alter table public.ledger_entries enable row level security;
 alter table public.bank_transactions enable row level security;
 alter table public.filing_previews enable row level security;
 alter table public.filing_submissions enable row level security;
+alter table public.filing_overrides enable row level security;
 alter table public.filing_review_comments enable row level security;
 
 grant usage on schema public to authenticated;
@@ -239,6 +260,7 @@ grant select, insert on public.ledger_entries to authenticated;
 grant select, insert, update on public.bank_transactions to authenticated;
 grant select, insert on public.filing_previews to authenticated;
 grant select, insert, update on public.filing_submissions to authenticated;
+grant select, insert on public.filing_overrides to authenticated;
 grant select, insert, update on public.filing_review_comments to authenticated;
 
 drop policy if exists "owners can create companies" on public.companies;
@@ -676,6 +698,46 @@ with check (
     where m.company_id = filing_submissions.company_id
       and m.user_id = (select auth.uid())
       and m.role = 'owner'
+  )
+);
+
+drop policy if exists "company members can read filing overrides" on public.filing_overrides;
+create policy "company members can read filing overrides"
+on public.filing_overrides for select
+to authenticated
+using (
+  exists (
+    select 1
+    from public.company_memberships m
+    where m.company_id = filing_overrides.company_id
+      and m.user_id = (select auth.uid())
+  )
+);
+
+drop policy if exists "owners can create filing overrides" on public.filing_overrides;
+create policy "owners can create filing overrides"
+on public.filing_overrides for insert
+to authenticated
+with check (
+  created_by = (select auth.uid())
+  and owner_confirmed_by = (select auth.uid())
+  and exists (
+    select 1
+    from public.company_memberships m
+    where m.company_id = filing_overrides.company_id
+      and m.user_id = (select auth.uid())
+      and m.role = 'owner'
+  )
+  and (
+    preview_id is null
+    or exists (
+      select 1
+      from public.filing_previews fp
+      where fp.id = filing_overrides.preview_id
+        and fp.company_id = filing_overrides.company_id
+        and fp.income_year = filing_overrides.income_year
+        and fp.filing = filing_overrides.filing
+    )
   )
 );
 

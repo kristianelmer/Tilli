@@ -10,6 +10,7 @@ import {
 } from "./lib/bank";
 import { assertSupportedBrregIdentity, fetchBrregEntity } from "./lib/brreg";
 import { COMPANY_DOCUMENTS_BUCKET, documentStorageKey } from "./lib/documents";
+import { assertNoBlockingFilingOverrides, validateFilingOverride } from "./lib/filing-overrides";
 import { validateManualJournal } from "./lib/manual-journal";
 import {
   OpeningShareholderInput,
@@ -436,6 +437,21 @@ export async function confirmSimulatedRf1086Submission(formData: FormData) {
   } catch (error) {
     redirect(`/?error=${encodeURIComponent(error instanceof Error ? error.message : "Hard review-blokk")}`);
   }
+  const { data: blockingOverrides, error: blockingOverrideError } = await supabase
+    .from("filing_overrides")
+    .select("risk_level, field_target")
+    .eq("company_id", preview.company_id)
+    .eq("income_year", preview.income_year)
+    .eq("filing", preview.filing)
+    .eq("risk_level", "block");
+  if (blockingOverrideError) {
+    redirect(`/?error=${encodeURIComponent(blockingOverrideError.message)}`);
+  }
+  try {
+    assertNoBlockingFilingOverrides(blockingOverrides ?? []);
+  } catch (error) {
+    redirect(`/?error=${encodeURIComponent(error instanceof Error ? error.message : "Blokkerende filing-overstyring")}`);
+  }
 
   let simulated;
   try {
@@ -480,6 +496,75 @@ export async function confirmSimulatedRf1086Submission(formData: FormData) {
     category: "filing",
     action: "rf1086_simulated_receipt_archived",
     message: `Simulert RF-1086-kvittering arkivert for ${preview.income_year}.`,
+  });
+
+  revalidatePath("/");
+  redirect("/");
+}
+
+export async function addFilingOverride(formData: FormData) {
+  if (!hasSupabaseEnv()) {
+    redirect("/?error=Supabase%20env%20mangler");
+  }
+  const supabase = await createSupabaseServerClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+  if (!user) {
+    redirect("/?error=Innlogging%20kreves");
+  }
+
+  const previewId = formString(formData, "previewId");
+  const { data: preview, error: previewError } = await supabase
+    .from("filing_previews")
+    .select("id, company_id, income_year, filing")
+    .eq("id", previewId)
+    .single();
+  if (previewError || !preview) {
+    redirect(`/?error=${encodeURIComponent(previewError?.message ?? "Fant ikke forhåndsvisning")}`);
+  }
+  if (formData.get("ownerConfirmed") !== "on") {
+    redirect("/?error=Overstyring%20m%C3%A5%20bekreftes%20av%20eier");
+  }
+
+  let override;
+  try {
+    override = validateFilingOverride({
+      fieldTarget: formString(formData, "fieldTarget"),
+      oldValue: formString(formData, "oldValue"),
+      newValue: formString(formData, "newValue"),
+      reason: formString(formData, "reason"),
+      riskLevel: formString(formData, "riskLevel") as "advisory" | "warning" | "block",
+    });
+  } catch (error) {
+    redirect(`/?error=${encodeURIComponent(error instanceof Error ? error.message : "Ugyldig filing-overstyring")}`);
+  }
+
+  const confirmedAt = new Date().toISOString();
+  const { error } = await supabase.from("filing_overrides").insert({
+    preview_id: preview.id,
+    company_id: preview.company_id,
+    income_year: preview.income_year,
+    filing: preview.filing,
+    field_target: override.fieldTarget,
+    old_value: override.oldValue,
+    new_value: override.newValue,
+    reason: override.reason,
+    risk_level: override.riskLevel,
+    owner_confirmed_by: user.id,
+    owner_confirmed_at: confirmedAt,
+    created_by: user.id,
+  });
+  if (error) {
+    redirect(`/?error=${encodeURIComponent(error.message)}`);
+  }
+
+  await supabase.from("audit_events").insert({
+    company_id: preview.company_id,
+    actor_id: user.id,
+    category: "filing",
+    action: "filing_override_added",
+    message: `Filing-overstyring lagt til for ${override.fieldTarget}: ${override.riskLevel}.`,
   });
 
   revalidatePath("/");

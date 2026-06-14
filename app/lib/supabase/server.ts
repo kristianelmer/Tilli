@@ -102,6 +102,23 @@ export type FilingSubmissionRow = {
   updated_at: string;
 };
 
+export type FilingOverrideRow = {
+  id: string;
+  preview_id: string | null;
+  company_id: string;
+  income_year: number;
+  filing: string;
+  field_target: string;
+  old_value: string;
+  new_value: string;
+  reason: string;
+  risk_level: "advisory" | "warning" | "block";
+  owner_confirmed_by: string;
+  owner_confirmed_at: string;
+  created_by: string;
+  created_at: string;
+};
+
 export type LedgerEntryRow = {
   id: string;
   company_id: string;
@@ -284,6 +301,23 @@ export async function listFilingSubmissions(companyIds: string[]) {
 
   return {
     submissions: (data ?? []) as FilingSubmissionRow[],
+    error: error?.message ?? null,
+  };
+}
+
+export async function listFilingOverrides(companyIds: string[]) {
+  if (!hasSupabaseEnv() || companyIds.length === 0) {
+    return { overrides: [] as FilingOverrideRow[], error: null };
+  }
+  const supabase = await createSupabaseServerClient();
+  const { data, error } = await supabase
+    .from("filing_overrides")
+    .select("id, preview_id, company_id, income_year, filing, field_target, old_value, new_value, reason, risk_level, owner_confirmed_by, owner_confirmed_at, created_by, created_at")
+    .in("company_id", companyIds)
+    .order("created_at", { ascending: false });
+
+  return {
+    overrides: (data ?? []) as FilingOverrideRow[],
     error: error?.message ?? null,
   };
 }
