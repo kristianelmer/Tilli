@@ -1,0 +1,23 @@
+{
+  "case_id": "unsupported_group_contribution",
+  "annual_data": {
+    "company_id": "314259521",
+    "income_year": 2025,
+    "interview": {
+      "shares_owned_at_year_end": true,
+      "bought_or_sold_shares": false,
+      "received_dividends": false,
+      "declared_owner_dividends": false,
+      "shareholder_loans": false,
+      "paid_costs": false,
+      "bank_balance_confirmed": true,
+      "has_unpaid_items": false,
+      "general_meeting_approved": true,
+      "authority_to_submit_confirmed": true
+    },
+    "posted_entries": [],
+    "documents": [],
+    "confirmations": ["authority_confirmed"]
+  },
+  "unsupported_reason": "Konsernbidrag er utenfor Talli launch subset."
+}

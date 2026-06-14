@@ -1,0 +1,34 @@
+{
+  "case_id": "simple_holding_blocked",
+  "annual_data": {
+    "company_id": "314259521",
+    "income_year": 2025,
+    "interview": {
+      "shares_owned_at_year_end": false,
+      "bought_or_sold_shares": false,
+      "received_dividends": false,
+      "declared_owner_dividends": false,
+      "shareholder_loans": false,
+      "paid_costs": false,
+      "bank_balance_confirmed": true,
+      "has_unpaid_items": true,
+      "general_meeting_approved": false,
+      "authority_to_submit_confirmed": false
+    },
+    "posted_entries": [
+      {
+        "id": "opening",
+        "company_id": "314259521",
+        "entry_date": "2025-01-01",
+        "memo": "Opening balance",
+        "source": "holding_action:opening_balance",
+        "lines": [
+          {"account": "1920", "description": "Opening bank", "debit": 30000, "credit": 0},
+          {"account": "2000", "description": "Share capital", "debit": 0, "credit": 30000}
+        ]
+      }
+    ],
+    "documents": [],
+    "confirmations": []
+  }
+}

@@ -1,0 +1,63 @@
+{
+  "case_id": "simple_holding_pass",
+  "annual_data": {
+    "company_id": "314259521",
+    "income_year": 2025,
+    "interview": {
+      "shares_owned_at_year_end": true,
+      "bought_or_sold_shares": false,
+      "received_dividends": true,
+      "declared_owner_dividends": false,
+      "shareholder_loans": false,
+      "paid_costs": true,
+      "bank_balance_confirmed": true,
+      "has_unpaid_items": false,
+      "general_meeting_approved": true,
+      "authority_to_submit_confirmed": true
+    },
+    "posted_entries": [
+      {
+        "id": "opening",
+        "company_id": "314259521",
+        "entry_date": "2025-01-01",
+        "memo": "Opening balance",
+        "source": "holding_action:opening_balance",
+        "lines": [
+          {"account": "1920", "description": "Opening bank", "debit": 30000, "credit": 0},
+          {"account": "2000", "description": "Share capital", "debit": 0, "credit": 30000}
+        ]
+      },
+      {
+        "id": "dividend",
+        "company_id": "314259521",
+        "entry_date": "2025-04-15",
+        "memo": "Dividend received",
+        "source": "holding_action:dividend_received:taxable_add_back:3000",
+        "lines": [
+          {"account": "1920", "description": "Bank", "debit": 100000, "credit": 0},
+          {"account": "8070", "description": "Dividend", "debit": 0, "credit": 100000}
+        ]
+      },
+      {
+        "id": "cost",
+        "company_id": "314259521",
+        "entry_date": "2025-05-01",
+        "memo": "Software cost",
+        "source": "holding_action:admin_cost",
+        "lines": [
+          {"account": "6420", "description": "Software", "debit": 1490, "credit": 0},
+          {"account": "1920", "description": "Bank", "debit": 0, "credit": 1490}
+        ]
+      }
+    ],
+    "documents": [],
+    "confirmations": ["authority_confirmed"]
+  },
+  "expected_totals": {
+    "bank_balance": 128510,
+    "dividend_income": 100000,
+    "admin_costs": 1490,
+    "fritaksmetoden_add_back": 3000,
+    "result_before_tax": 98510
+  }
+}
