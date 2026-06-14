@@ -63,21 +63,70 @@ create table if not exists public.documents (
   created_at timestamptz not null default now()
 );
 
+create table if not exists public.opening_balance_setups (
+  id uuid primary key default gen_random_uuid(),
+  company_id uuid not null references public.companies(id) on delete cascade,
+  income_year integer not null check (income_year between 2000 and 2100),
+  bank_balance numeric not null check (bank_balance >= 0),
+  share_capital numeric not null check (share_capital >= 0),
+  share_count integer not null check (share_count > 0),
+  nominal_value numeric not null check (nominal_value > 0),
+  locked_at timestamptz not null default now(),
+  created_by uuid not null references auth.users(id) on delete restrict,
+  created_at timestamptz not null default now(),
+  unique (company_id, income_year)
+);
+
+create table if not exists public.opening_shareholders (
+  id uuid primary key default gen_random_uuid(),
+  setup_id uuid not null references public.opening_balance_setups(id) on delete cascade,
+  company_id uuid not null references public.companies(id) on delete cascade,
+  name text not null,
+  shareholder_kind text not null check (shareholder_kind in ('norwegian_person', 'norwegian_company')),
+  national_id text check (national_id is null or national_id ~ '^[0-9]{11}$'),
+  org_number text check (org_number is null or org_number ~ '^[0-9]{9}$'),
+  share_count integer not null check (share_count >= 0),
+  created_by uuid not null references auth.users(id) on delete restrict,
+  created_at timestamptz not null default now()
+);
+
+create table if not exists public.ledger_entries (
+  id uuid primary key default gen_random_uuid(),
+  company_id uuid not null references public.companies(id) on delete cascade,
+  setup_id uuid references public.opening_balance_setups(id) on delete restrict,
+  income_year integer not null check (income_year between 2000 and 2100),
+  entry_type text not null,
+  memo text not null,
+  lines jsonb not null,
+  posted_at timestamptz not null default now(),
+  created_by uuid not null references auth.users(id) on delete restrict,
+  created_at timestamptz not null default now()
+);
+
 create index if not exists companies_created_by_idx on public.companies(created_by);
 create index if not exists company_memberships_user_id_idx on public.company_memberships(user_id);
 create index if not exists audit_events_company_id_created_at_idx on public.audit_events(company_id, created_at desc);
 create index if not exists documents_company_id_income_year_idx on public.documents(company_id, income_year);
+create index if not exists opening_balance_setups_company_id_year_idx on public.opening_balance_setups(company_id, income_year);
+create index if not exists opening_shareholders_setup_id_idx on public.opening_shareholders(setup_id);
+create index if not exists ledger_entries_company_id_year_idx on public.ledger_entries(company_id, income_year);
 
 alter table public.companies enable row level security;
 alter table public.company_memberships enable row level security;
 alter table public.audit_events enable row level security;
 alter table public.documents enable row level security;
+alter table public.opening_balance_setups enable row level security;
+alter table public.opening_shareholders enable row level security;
+alter table public.ledger_entries enable row level security;
 
 grant usage on schema public to authenticated;
 grant select, insert, update on public.companies to authenticated;
 grant select, insert, update on public.company_memberships to authenticated;
 grant select, insert on public.audit_events to authenticated;
 grant select, insert on public.documents to authenticated;
+grant select, insert on public.opening_balance_setups to authenticated;
+grant select, insert on public.opening_shareholders to authenticated;
+grant select, insert on public.ledger_entries to authenticated;
 
 drop policy if exists "owners can create companies" on public.companies;
 create policy "owners can create companies"
@@ -226,6 +275,90 @@ with check (
     select 1
     from public.company_memberships m
     where m.company_id = ((storage.foldername(name))[1])::uuid
+      and m.user_id = (select auth.uid())
+      and m.role = 'owner'
+  )
+);
+
+drop policy if exists "company members can read opening balance setups" on public.opening_balance_setups;
+create policy "company members can read opening balance setups"
+on public.opening_balance_setups for select
+to authenticated
+using (
+  exists (
+    select 1
+    from public.company_memberships m
+    where m.company_id = opening_balance_setups.company_id
+      and m.user_id = (select auth.uid())
+  )
+);
+
+drop policy if exists "owners can create opening balance setups" on public.opening_balance_setups;
+create policy "owners can create opening balance setups"
+on public.opening_balance_setups for insert
+to authenticated
+with check (
+  created_by = (select auth.uid())
+  and exists (
+    select 1
+    from public.company_memberships m
+    where m.company_id = opening_balance_setups.company_id
+      and m.user_id = (select auth.uid())
+      and m.role = 'owner'
+  )
+);
+
+drop policy if exists "company members can read opening shareholders" on public.opening_shareholders;
+create policy "company members can read opening shareholders"
+on public.opening_shareholders for select
+to authenticated
+using (
+  exists (
+    select 1
+    from public.company_memberships m
+    where m.company_id = opening_shareholders.company_id
+      and m.user_id = (select auth.uid())
+  )
+);
+
+drop policy if exists "owners can create opening shareholders" on public.opening_shareholders;
+create policy "owners can create opening shareholders"
+on public.opening_shareholders for insert
+to authenticated
+with check (
+  created_by = (select auth.uid())
+  and exists (
+    select 1
+    from public.company_memberships m
+    where m.company_id = opening_shareholders.company_id
+      and m.user_id = (select auth.uid())
+      and m.role = 'owner'
+  )
+);
+
+drop policy if exists "company members can read ledger entries" on public.ledger_entries;
+create policy "company members can read ledger entries"
+on public.ledger_entries for select
+to authenticated
+using (
+  exists (
+    select 1
+    from public.company_memberships m
+    where m.company_id = ledger_entries.company_id
+      and m.user_id = (select auth.uid())
+  )
+);
+
+drop policy if exists "owners can create ledger entries" on public.ledger_entries;
+create policy "owners can create ledger entries"
+on public.ledger_entries for insert
+to authenticated
+with check (
+  created_by = (select auth.uid())
+  and exists (
+    select 1
+    from public.company_memberships m
+    where m.company_id = ledger_entries.company_id
       and m.user_id = (select auth.uid())
       and m.role = 'owner'
   )

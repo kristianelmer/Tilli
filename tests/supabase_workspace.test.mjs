@@ -8,6 +8,7 @@ import { createClient } from "@supabase/supabase-js";
 import pg from "pg";
 
 import { COMPANY_DOCUMENTS_BUCKET, documentStorageKey } from "../app/lib/documents.ts";
+import { openingBalanceLedgerLines } from "../app/lib/opening-balance.ts";
 
 const requiredEnv = ["SUPABASE_URL", "SUPABASE_ANON_KEY", "SUPABASE_SERVICE_ROLE_KEY"];
 
@@ -207,6 +208,82 @@ test(
       .eq("company_id", companyId);
     assert.ifError(outsiderMembershipError);
     assert.deepEqual(outsiderMemberships, []);
+
+    const openingInput = {
+      bankBalance: 30000,
+      shareCapital: 30000,
+      shareCount: 100,
+      nominalValue: 300,
+      shareholders: [
+        {
+          name: "Ola Nordmann",
+          shareholderKind: "norwegian_person",
+          nationalId: "01017012345",
+          shareCount: 100,
+        },
+      ],
+    };
+    const { data: setup, error: setupError } = await owner
+      .from("opening_balance_setups")
+      .insert({
+        company_id: companyId,
+        income_year: 2025,
+        bank_balance: openingInput.bankBalance,
+        share_capital: openingInput.shareCapital,
+        share_count: openingInput.shareCount,
+        nominal_value: openingInput.nominalValue,
+        created_by: ownerUser.id,
+      })
+      .select("id, share_count")
+      .single();
+    assert.ifError(setupError);
+    assert.equal(setup.share_count, 100);
+
+    const { error: openingShareholderError } = await owner.from("opening_shareholders").insert({
+      setup_id: setup.id,
+      company_id: companyId,
+      name: "Ola Nordmann",
+      shareholder_kind: "norwegian_person",
+      national_id: "01017012345",
+      share_count: 100,
+      created_by: ownerUser.id,
+    });
+    assert.ifError(openingShareholderError);
+
+    const { error: ledgerError } = await owner.from("ledger_entries").insert({
+      company_id: companyId,
+      setup_id: setup.id,
+      income_year: 2025,
+      entry_type: "opening_balance",
+      memo: "Åpningsbalanse for Talli-start",
+      lines: openingBalanceLedgerLines(openingInput),
+      created_by: ownerUser.id,
+    });
+    assert.ifError(ledgerError);
+
+    const { error: openingAuditError } = await owner.from("audit_events").insert({
+      company_id: companyId,
+      actor_id: ownerUser.id,
+      category: "ledger",
+      action: "opening_balance_locked",
+      message: "Åpningsbalanse låst for 2025.",
+    });
+    assert.ifError(openingAuditError);
+
+    const { data: openingReload, error: openingReloadError } = await owner
+      .from("opening_balance_setups")
+      .select("id, share_count")
+      .eq("id", setup.id)
+      .single();
+    assert.ifError(openingReloadError);
+    assert.equal(openingReload.share_count, 100);
+
+    const { data: outsiderSetups, error: outsiderSetupError } = await outsider
+      .from("opening_balance_setups")
+      .select("id")
+      .eq("id", setup.id);
+    assert.ifError(outsiderSetupError);
+    assert.deepEqual(outsiderSetups, []);
 
     const documentId = randomUUID();
     const storageKey = documentStorageKey(companyId, 2025, documentId, "bank.pdf");

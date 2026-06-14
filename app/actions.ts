@@ -4,6 +4,11 @@ import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { assertSupportedBrregIdentity, fetchBrregEntity } from "./lib/brreg";
 import { COMPANY_DOCUMENTS_BUCKET, documentStorageKey } from "./lib/documents";
+import {
+  OpeningShareholderInput,
+  openingBalanceLedgerLines,
+  validateOpeningBalanceInput,
+} from "./lib/opening-balance";
 import { createSupabaseServerClient, hasSupabaseEnv } from "./lib/supabase/server";
 
 function formString(formData: FormData, key: string) {
@@ -180,4 +185,105 @@ export async function uploadDocument(formData: FormData) {
 
   revalidatePath("/");
   redirect("/");
+}
+
+export async function createOpeningBalanceSetup(formData: FormData) {
+  if (!hasSupabaseEnv()) {
+    redirect("/?error=Supabase%20env%20mangler");
+  }
+  const supabase = await createSupabaseServerClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+  if (!user) {
+    redirect("/?error=Innlogging%20kreves");
+  }
+
+  const companyId = formString(formData, "companyId");
+  const incomeYear = Number(formString(formData, "incomeYear") || "2025");
+  const shareholders = parseShareholders(formData);
+  const input = {
+    bankBalance: Number(formString(formData, "bankBalance")),
+    shareCapital: Number(formString(formData, "shareCapital")),
+    shareCount: Number(formString(formData, "shareCount")),
+    nominalValue: Number(formString(formData, "nominalValue")),
+    shareholders,
+  };
+  try {
+    validateOpeningBalanceInput(input);
+  } catch (error) {
+    redirect(`/?error=${encodeURIComponent(error instanceof Error ? error.message : "Ugyldig åpningsbalanse")}`);
+  }
+
+  const { data: setup, error: setupError } = await supabase
+    .from("opening_balance_setups")
+    .insert({
+      company_id: companyId,
+      income_year: incomeYear,
+      bank_balance: input.bankBalance,
+      share_capital: input.shareCapital,
+      share_count: input.shareCount,
+      nominal_value: input.nominalValue,
+      created_by: user.id,
+    })
+    .select("id")
+    .single();
+  if (setupError || !setup) {
+    redirect(`/?error=${encodeURIComponent(setupError?.message ?? "Kunne ikke lagre åpningsbalanse")}`);
+  }
+
+  const { error: shareholderError } = await supabase.from("opening_shareholders").insert(
+    shareholders.map((shareholder) => ({
+      setup_id: setup.id,
+      company_id: companyId,
+      name: shareholder.name,
+      shareholder_kind: shareholder.shareholderKind,
+      national_id: shareholder.nationalId || null,
+      org_number: shareholder.orgNumber || null,
+      share_count: shareholder.shareCount,
+      created_by: user.id,
+    })),
+  );
+  if (shareholderError) {
+    redirect(`/?error=${encodeURIComponent(shareholderError.message)}`);
+  }
+
+  const { error: ledgerError } = await supabase.from("ledger_entries").insert({
+    company_id: companyId,
+    setup_id: setup.id,
+    income_year: incomeYear,
+    entry_type: "opening_balance",
+    memo: "Åpningsbalanse for Talli-start",
+    lines: openingBalanceLedgerLines(input),
+    created_by: user.id,
+  });
+  if (ledgerError) {
+    redirect(`/?error=${encodeURIComponent(ledgerError.message)}`);
+  }
+
+  await supabase.from("audit_events").insert({
+    company_id: companyId,
+    actor_id: user.id,
+    category: "ledger",
+    action: "opening_balance_locked",
+    message: `Åpningsbalanse låst for ${incomeYear}.`,
+  });
+
+  revalidatePath("/");
+  redirect("/");
+}
+
+function parseShareholders(formData: FormData): OpeningShareholderInput[] {
+  const names = formData.getAll("shareholderName").map(String);
+  return names
+    .map((name, index) => ({
+      name: name.trim(),
+      shareholderKind: String(formData.getAll("shareholderKind")[index] ?? "norwegian_person") as
+        | "norwegian_person"
+        | "norwegian_company",
+      nationalId: String(formData.getAll("shareholderNationalId")[index] ?? "").trim(),
+      orgNumber: String(formData.getAll("shareholderOrgNumber")[index] ?? "").trim(),
+      shareCount: Number(formData.getAll("shareholderShareCount")[index] ?? 0),
+    }))
+    .filter((shareholder) => shareholder.name || shareholder.shareCount > 0);
 }

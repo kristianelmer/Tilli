@@ -1,5 +1,11 @@
-import { createWorkspace, signIn, signOut, signUp, uploadDocument } from "./actions";
-import { getCurrentUser, hasSupabaseEnv, listCompanyWorkspaces, listDocumentsForCompanies } from "./lib/supabase/server";
+import { createOpeningBalanceSetup, createWorkspace, signIn, signOut, signUp, uploadDocument } from "./actions";
+import {
+  getCurrentUser,
+  hasSupabaseEnv,
+  listCompanyWorkspaces,
+  listDocumentsForCompanies,
+  listOpeningSetups,
+} from "./lib/supabase/server";
 
 type HomeProps = {
   searchParams?: Promise<{ error?: string }>;
@@ -25,6 +31,7 @@ export default async function Home({ searchParams }: HomeProps) {
   const user = await getCurrentUser();
   const { companies, error } = user ? await listCompanyWorkspaces() : { companies: [], error: null };
   const { documents } = user ? await listDocumentsForCompanies(companies.map((company) => company.id)) : { documents: [] };
+  const { setups, shareholders } = user ? await listOpeningSetups(companies.map((company) => company.id)) : { setups: [], shareholders: [] };
 
   return (
     <main className="shell">
@@ -173,43 +180,118 @@ export default async function Home({ searchParams }: HomeProps) {
           </section>
 
           {companies.length > 0 ? (
-            <section className="band">
-              <div className="sectionHeader">
-                <p className="eyebrow">Dokumenter</p>
-                <h2>Privat lagring med signert nedlasting.</h2>
-              </div>
-              <form className="dataPanel formPanel widePanel" action={uploadDocument}>
-                <input name="companyId" type="hidden" value={companies[0].id} />
-                <label>
-                  Inntektsår
-                  <input name="incomeYear" inputMode="numeric" defaultValue="2025" required />
-                </label>
-                <label>
-                  Dokumenttype
-                  <input name="documentType" defaultValue="bank_statement" required />
-                </label>
-                <label>
-                  Knyttet til
-                  <input name="linkedTo" defaultValue="aksjonærregisteroppgaven" required />
-                </label>
-                <label>
-                  Fil
-                  <input name="file" type="file" required />
-                </label>
-                <button className="primaryButton" type="submit">
-                  Last opp dokument
-                </button>
-              </form>
-              <div className="table">
-                {documents.map((document) => (
-                  <div className="tableRow" key={document.id}>
-                    <span>{document.name}</span>
-                    <span>{document.linked_to}</span>
-                    <a href={`/documents/${document.id}/download`}>Signert nedlasting</a>
-                  </div>
-                ))}
-              </div>
-            </section>
+            <>
+              <section className="band">
+                <div className="sectionHeader">
+                  <p className="eyebrow">Åpningsbalanse</p>
+                  <h2>Lås første aksje- og bankgrunnlag.</h2>
+                </div>
+                <form className="dataPanel formPanel widePanel" action={createOpeningBalanceSetup}>
+                  <input name="companyId" type="hidden" value={companies[0].id} />
+                  <label>
+                    Inntektsår
+                    <input name="incomeYear" inputMode="numeric" defaultValue="2025" required />
+                  </label>
+                  <label>
+                    Bankbalanse
+                    <input name="bankBalance" inputMode="decimal" defaultValue="30000" required />
+                  </label>
+                  <label>
+                    Aksjekapital
+                    <input name="shareCapital" inputMode="decimal" defaultValue="30000" required />
+                  </label>
+                  <label>
+                    Antall aksjer
+                    <input name="shareCount" inputMode="numeric" defaultValue="100" required />
+                  </label>
+                  <label>
+                    Pålydende
+                    <input name="nominalValue" inputMode="decimal" defaultValue="300" required />
+                  </label>
+                  <label>
+                    Aksjonærnavn
+                    <input name="shareholderName" required />
+                  </label>
+                  <label>
+                    Aksjonærtype
+                    <select name="shareholderKind" defaultValue="norwegian_person">
+                      <option value="norwegian_person">Norsk person</option>
+                      <option value="norwegian_company">Norsk selskap</option>
+                    </select>
+                  </label>
+                  <label>
+                    Fødselsnummer
+                    <input name="shareholderNationalId" inputMode="numeric" placeholder="11 sifre ved person" />
+                  </label>
+                  <label>
+                    Organisasjonsnummer
+                    <input name="shareholderOrgNumber" inputMode="numeric" placeholder="9 sifre ved selskap" />
+                  </label>
+                  <label>
+                    Aksjer hos aksjonær
+                    <input name="shareholderShareCount" inputMode="numeric" defaultValue="100" required />
+                  </label>
+                  <button className="primaryButton" type="submit">
+                    Lås åpningsbalanse
+                  </button>
+                </form>
+                <div className="readinessGrid">
+                  {setups.map((setup) => (
+                    <div className="readinessItem" key={setup.id}>
+                      <span>{setup.income_year}</span>
+                      <strong data-status="ready">{Number(setup.share_count)} aksjer</strong>
+                      <p>Bank: {Number(setup.bank_balance).toFixed(2)} kr</p>
+                      <p>Aksjekapital: {Number(setup.share_capital).toFixed(2)} kr</p>
+                      <p>
+                        Aksjonærer:{" "}
+                        {shareholders
+                          .filter((shareholder) => shareholder.setup_id === setup.id)
+                          .map((shareholder) => `${shareholder.name} (${shareholder.share_count})`)
+                          .join(", ")}
+                      </p>
+                    </div>
+                  ))}
+                </div>
+              </section>
+
+              <section className="band">
+                <div className="sectionHeader">
+                  <p className="eyebrow">Dokumenter</p>
+                  <h2>Privat lagring med signert nedlasting.</h2>
+                </div>
+                <form className="dataPanel formPanel widePanel" action={uploadDocument}>
+                  <input name="companyId" type="hidden" value={companies[0].id} />
+                  <label>
+                    Inntektsår
+                    <input name="incomeYear" inputMode="numeric" defaultValue="2025" required />
+                  </label>
+                  <label>
+                    Dokumenttype
+                    <input name="documentType" defaultValue="bank_statement" required />
+                  </label>
+                  <label>
+                    Knyttet til
+                    <input name="linkedTo" defaultValue="aksjonærregisteroppgaven" required />
+                  </label>
+                  <label>
+                    Fil
+                    <input name="file" type="file" required />
+                  </label>
+                  <button className="primaryButton" type="submit">
+                    Last opp dokument
+                  </button>
+                </form>
+                <div className="table">
+                  {documents.map((document) => (
+                    <div className="tableRow" key={document.id}>
+                      <span>{document.name}</span>
+                      <span>{document.linked_to}</span>
+                      <a href={`/documents/${document.id}/download`}>Signert nedlasting</a>
+                    </div>
+                  ))}
+                </div>
+              </section>
+            </>
           ) : null}
         </>
       )}
