@@ -15,6 +15,7 @@ from holding_core.rf1086_codes import (
     DIVIDEND_DISTRIBUTION_CODE,
     FORMATION_STIFTELSE_CODE,
     production_code_blockers,
+    production_code_blockers_for_case,
     rf1086_code_decisions,
 )
 from holding_core.validation import run_rf1086_validation
@@ -257,6 +258,21 @@ class Rf1086SimulationTest(unittest.TestCase):
         self.assertIn(
             f">{DIVIDEND_DISTRIBUTION_CODE}</AksjeUtbytteHendelsestype-datadef-36564>",
             dividend_documents.hovedskjema_xml,
+        )
+
+    def test_production_code_blockers_are_case_specific(self) -> None:
+        stiftelse = FilingCase.from_json_file(FIXTURE_DIR / "stiftelse.json")
+        share_sale = FilingCase.from_json_file(FIXTURE_DIR / "share_sale.json")
+        dividend = FilingCase.from_json_file(FIXTURE_DIR / "dividend.json")
+
+        self.assertEqual(production_code_blockers_for_case(stiftelse), ())
+        self.assertEqual(
+            {decision.event for decision in production_code_blockers_for_case(share_sale)},
+            {"kjop", "salg"},
+        )
+        self.assertEqual(
+            {decision.event for decision in production_code_blockers_for_case(dividend)},
+            {"utbytte"},
         )
 
     def _assert_xsd_valid(self, xmllint: str, schema: Path, xml: Path) -> None:

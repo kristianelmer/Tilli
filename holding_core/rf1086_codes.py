@@ -4,6 +4,8 @@ from enum import StrEnum
 
 from pydantic import BaseModel, ConfigDict
 
+from holding_core.models import DividendEvent, FilingCase, FormationEvent, ShareSaleEvent
+
 
 class CodeVerificationStatus(StrEnum):
     OFFICIAL_API_EXAMPLE = "official_api_example"
@@ -93,3 +95,29 @@ def rf1086_code_decisions() -> tuple[Rf1086CodeDecision, ...]:
 
 def production_code_blockers() -> tuple[Rf1086CodeDecision, ...]:
     return tuple(decision for decision in RF1086_CODE_DECISIONS if decision.production_blocker)
+
+
+def rf1086_code_decisions_for_case(case: FilingCase) -> tuple[Rf1086CodeDecision, ...]:
+    required_events: list[str] = []
+    for event in case.events:
+        if isinstance(event, FormationEvent):
+            required_events.append("stiftelse")
+        elif isinstance(event, ShareSaleEvent):
+            required_events.extend(["kjop", "salg"])
+        elif isinstance(event, DividendEvent):
+            required_events.append("utbytte")
+
+    decisions_by_event = {decision.event: decision for decision in RF1086_CODE_DECISIONS}
+    ordered_unique_events = tuple(dict.fromkeys(required_events))
+    return tuple(decisions_by_event[event] for event in ordered_unique_events)
+
+
+def production_code_blockers_for_case(case: FilingCase) -> tuple[Rf1086CodeDecision, ...]:
+    return tuple(decision for decision in rf1086_code_decisions_for_case(case) if decision.production_blocker)
+
+
+def assert_rf1086_production_codes_verified(case: FilingCase) -> None:
+    blockers = production_code_blockers_for_case(case)
+    if blockers:
+        blocked = ", ".join(f"{decision.event}={decision.code_value}" for decision in blockers)
+        raise ValueError(f"RF-1086 production code values are not verified: {blocked}")

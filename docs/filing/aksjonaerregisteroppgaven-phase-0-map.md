@@ -689,6 +689,7 @@ Decision:
 - Keep generating simulation XML with the current local values so fixture coverage continues.
 - Do not allow production direct filing for cases that require `K`, `S`, or `U` until those exact values are confirmed through official docs, a code list, or Skatteetaten test-environment acceptance.
 - Keep the blocker in code, docs, and tests so it cannot be treated as merely a TODO.
+- 2026-06-14 HITL decision: preserve the blockers for `K`, `S`, and `U`. The current implementation uses `production_code_blockers_for_case` so stiftelse-only cases can pass the code-value gate, while share-sale and dividend cases remain blocked for production submission.
 
 ## Phase 0 Conclusion
 
