@@ -13,6 +13,7 @@ import { COMPANY_DOCUMENTS_BUCKET, documentStorageKey } from "../app/lib/documen
 import { openingBalanceLedgerLines } from "../app/lib/opening-balance.ts";
 import { buildNoActivityRf1086Case, renderRf1086PreviewWithPython } from "../app/lib/rf1086.ts";
 import { simulateRf1086SubmissionWithPython } from "../app/lib/rf1086-submission.ts";
+import { assertAdvisoryCanBeAcknowledged, assertNoHardReviewBlocks } from "../app/lib/review.ts";
 
 const requiredEnv = ["SUPABASE_URL", "SUPABASE_ANON_KEY", "SUPABASE_SERVICE_ROLE_KEY"];
 
@@ -139,8 +140,12 @@ test(
   const admin = serviceClient();
   const ownerUser = await createConfirmedUser("owner");
   const outsiderUser = await createConfirmedUser("outsider");
+  const reviewerUser = await createConfirmedUser("reviewer");
+  const readOnlyUser = await createConfirmedUser("readonly");
   const owner = await signIn(ownerUser);
   const outsider = await signIn(outsiderUser);
+  const reviewer = await signIn(reviewerUser);
+  const readOnly = await signIn(readOnlyUser);
   const orgNumber = `${Math.floor(100000000 + Math.random() * 899999999)}`;
   let companyId;
 
@@ -174,6 +179,38 @@ test(
       accepted_at: new Date().toISOString(),
     });
     assert.ifError(membershipError);
+
+    const { error: reviewerInviteError } = await owner.from("company_memberships").insert({
+      company_id: companyId,
+      user_id: reviewerUser.id,
+      role: "reviewer",
+      invited_by: ownerUser.id,
+      accepted_at: new Date().toISOString(),
+    });
+    assert.ifError(reviewerInviteError);
+    const { error: readOnlyInviteError } = await owner.from("company_memberships").insert({
+      company_id: companyId,
+      user_id: readOnlyUser.id,
+      role: "read_only",
+      invited_by: ownerUser.id,
+      accepted_at: new Date().toISOString(),
+    });
+    assert.ifError(readOnlyInviteError);
+    const { data: persistedRoles, error: persistedRolesError } = await admin
+      .from("company_memberships")
+      .select("user_id, role")
+      .eq("company_id", companyId);
+    assert.ifError(persistedRolesError);
+    assert.deepEqual(
+      persistedRoles
+        .map((membership) => [membership.user_id, membership.role])
+        .sort((a, b) => String(a[0]).localeCompare(String(b[0]))),
+      [
+        [ownerUser.id, "owner"],
+        [readOnlyUser.id, "read_only"],
+        [reviewerUser.id, "reviewer"],
+      ].sort((a, b) => String(a[0]).localeCompare(String(b[0]))),
+    );
 
     const { error: auditError } = await owner.from("audit_events").insert({
       company_id: companyId,
@@ -419,6 +456,68 @@ test(
     assert.ifError(outsiderPreviewError);
     assert.deepEqual(outsiderPreviews, []);
 
+    const { data: reviewerPreviews, error: reviewerPreviewError } = await reviewer
+      .from("filing_previews")
+      .select("id")
+      .eq("id", filingPreview.id);
+    assert.ifError(reviewerPreviewError);
+    assert.deepEqual(reviewerPreviews, [{ id: filingPreview.id }]);
+
+    const { data: advisoryComment, error: advisoryCommentError } = await reviewer
+      .from("filing_review_comments")
+      .insert({
+        preview_id: filingPreview.id,
+        company_id: companyId,
+        target: "rf1086_preview",
+        severity: "advisory",
+        body: "Kontroller aksjonærnavn før innsending.",
+        created_by: reviewerUser.id,
+      })
+      .select("id, severity, acknowledged_by")
+      .single();
+    assert.ifError(advisoryCommentError);
+    assert.equal(advisoryComment.severity, "advisory");
+    assertAdvisoryCanBeAcknowledged({ severity: advisoryComment.severity });
+
+    const { error: readOnlyCommentError } = await readOnly.from("filing_review_comments").insert({
+      preview_id: filingPreview.id,
+      company_id: companyId,
+      target: "rf1086_preview",
+      severity: "advisory",
+      body: "Read-only should not write.",
+      created_by: readOnlyUser.id,
+    });
+    assert.ok(readOnlyCommentError);
+
+    const acknowledgedAt = new Date().toISOString();
+    const { data: acknowledgedComment, error: acknowledgeError } = await owner
+      .from("filing_review_comments")
+      .update({ acknowledged_by: ownerUser.id, acknowledged_at: acknowledgedAt })
+      .eq("id", advisoryComment.id)
+      .select("id, acknowledged_by")
+      .single();
+    assert.ifError(acknowledgeError);
+    assert.equal(acknowledgedComment.acknowledged_by, ownerUser.id);
+
+    const { data: hardBlockComment, error: hardBlockError } = await reviewer
+      .from("filing_review_comments")
+      .insert({
+        preview_id: filingPreview.id,
+        company_id: companyId,
+        target: "rf1086_preview",
+        severity: "hard_block",
+        body: "Mangler gyldig avklaring.",
+        created_by: reviewerUser.id,
+      })
+      .select("id, severity")
+      .single();
+    assert.ifError(hardBlockError);
+    assert.throws(() => assertAdvisoryCanBeAcknowledged({ severity: hardBlockComment.severity }), /Hard review-blokk/);
+    assert.throws(
+      () => assertNoHardReviewBlocks([{ severity: "advisory" }, { severity: hardBlockComment.severity }]),
+      /simulert innsending/,
+    );
+
     const bankCsv = "date,text,amount,balance\n2025-01-02,Opening,30000,30000\n2025-01-03,Bank fee,-50,29950\n";
     const parsedBank = parseBankCsv(bankCsv);
     for (let attempt = 0; attempt < 2; attempt += 1) {
@@ -576,6 +675,8 @@ test(
     }
     await admin.auth.admin.deleteUser(ownerUser.id);
     await admin.auth.admin.deleteUser(outsiderUser.id);
+    await admin.auth.admin.deleteUser(reviewerUser.id);
+    await admin.auth.admin.deleteUser(readOnlyUser.id);
   }
   },
 );

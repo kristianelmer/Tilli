@@ -1,9 +1,12 @@
 import {
+  acknowledgeFilingReviewComment,
+  addFilingReviewComment,
   confirmSimulatedRf1086Submission,
   createOpeningBalanceSetup,
   createWorkspace,
   generateRf1086Preview,
   importBankCsv,
+  inviteWorkspaceReviewer,
   recordAdminCost,
   signIn,
   signOut,
@@ -18,6 +21,7 @@ import {
   listCompanyWorkspaces,
   listDocumentsForCompanies,
   listFilingPreviews,
+  listFilingReviewComments,
   listFilingSubmissions,
   listLedgerEntries,
   listOpeningSetups,
@@ -50,6 +54,7 @@ export default async function Home({ searchParams }: HomeProps) {
   const { setups, shareholders } = user ? await listOpeningSetups(companies.map((company) => company.id)) : { setups: [], shareholders: [] };
   const { previews } = user ? await listFilingPreviews(companies.map((company) => company.id)) : { previews: [] };
   const { submissions } = user ? await listFilingSubmissions(companies.map((company) => company.id)) : { submissions: [] };
+  const { comments } = user ? await listFilingReviewComments(companies.map((company) => company.id)) : { comments: [] };
   const { transactions } = user ? await listBankTransactions(companies.map((company) => company.id)) : { transactions: [] };
   const { entries } = user ? await listLedgerEntries(companies.map((company) => company.id)) : { entries: [] };
   const primaryCompanyId = companies[0]?.id;
@@ -299,6 +304,24 @@ export default async function Home({ searchParams }: HomeProps) {
                   <p className="eyebrow">RF-1086</p>
                   <h2>Forhåndsvisning fra Python-motoren.</h2>
                 </div>
+                <form className="dataPanel formPanel widePanel" action={inviteWorkspaceReviewer}>
+                  <input name="companyId" type="hidden" value={primaryCompanyId} />
+                  <span className="panelLabel">Inviter reviewer</span>
+                  <label>
+                    Bruker-ID
+                    <input name="userId" placeholder="Supabase auth user id" required />
+                  </label>
+                  <label>
+                    Rolle
+                    <select name="role" defaultValue="reviewer">
+                      <option value="reviewer">Reviewer</option>
+                      <option value="read_only">Read-only</option>
+                    </select>
+                  </label>
+                  <button className="secondaryButton" type="submit">
+                    Legg til tilgang
+                  </button>
+                </form>
                 <div className="readinessGrid">
                   {previews.map((preview) => (
                     <div className="readinessItem" key={preview.id}>
@@ -309,6 +332,42 @@ export default async function Home({ searchParams }: HomeProps) {
                         <p key={issue.code}>{issue.message}</p>
                       ))}
                       <pre>{preview.preview}</pre>
+                      <form className="confirmationPanel" action={addFilingReviewComment}>
+                        <input name="previewId" type="hidden" value={preview.id} />
+                        <label>
+                          Alvorlighet
+                          <select name="severity" defaultValue="advisory">
+                            <option value="advisory">Advisory</option>
+                            <option value="hard_block">Hard block</option>
+                          </select>
+                        </label>
+                        <label>
+                          Kommentar
+                          <textarea name="body" placeholder="Review-kommentar" required />
+                        </label>
+                        <button className="secondaryButton" type="submit">
+                          Kommenter
+                        </button>
+                      </form>
+                      <div className="reviewList">
+                        {comments
+                          .filter((comment) => comment.preview_id === preview.id)
+                          .map((comment) => (
+                            <div className="reviewItem" key={comment.id}>
+                              <span>{comment.severity}</span>
+                              <p>{comment.body}</p>
+                              <strong>{comment.acknowledged_at ? "Acknowledged" : "Åpen"}</strong>
+                              {comment.severity === "advisory" && !comment.acknowledged_at ? (
+                                <form action={acknowledgeFilingReviewComment}>
+                                  <input name="commentId" type="hidden" value={comment.id} />
+                                  <button className="secondaryButton" type="submit">
+                                    Acknowledge
+                                  </button>
+                                </form>
+                              ) : null}
+                            </div>
+                          ))}
+                      </div>
                       {preview.status === "ready" ? (
                         <form className="confirmationPanel" action={confirmSimulatedRf1086Submission}>
                           <input name="previewId" type="hidden" value={preview.id} />

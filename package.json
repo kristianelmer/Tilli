@@ -12,6 +12,7 @@
     "test:deadlines": "node --experimental-strip-types --test tests/deadlines.test.mjs",
     "test:documents": "node --experimental-strip-types --test tests/documents.test.mjs",
     "test:opening": "node --experimental-strip-types --test tests/opening_balance.test.mjs",
+    "test:review": "node --experimental-strip-types --test tests/review_workflow.test.mjs",
     "test:rf1086:persisted": "node --experimental-strip-types --test tests/rf1086_persisted_preview.test.mjs",
     "test:rf1086:submission": "node --experimental-strip-types --test tests/rf1086_submission_persisted.test.mjs",
     "test:web": "node --test tests/web_workspace.test.mjs",

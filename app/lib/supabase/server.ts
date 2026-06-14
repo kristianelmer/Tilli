@@ -121,6 +121,19 @@ export type BankTransactionRow = {
   created_at: string;
 };
 
+export type FilingReviewCommentRow = {
+  id: string;
+  preview_id: string;
+  company_id: string;
+  target: string;
+  severity: "advisory" | "hard_block";
+  body: string;
+  created_by: string;
+  acknowledged_by: string | null;
+  acknowledged_at: string | null;
+  created_at: string;
+};
+
 export function hasSupabaseEnv() {
   return Boolean(process.env.SUPABASE_URL && process.env.SUPABASE_ANON_KEY);
 }
@@ -276,6 +289,23 @@ export async function listLedgerEntries(companyIds: string[]) {
 
   return {
     entries: (data ?? []) as LedgerEntryRow[],
+    error: error?.message ?? null,
+  };
+}
+
+export async function listFilingReviewComments(companyIds: string[]) {
+  if (!hasSupabaseEnv() || companyIds.length === 0) {
+    return { comments: [] as FilingReviewCommentRow[], error: null };
+  }
+  const supabase = await createSupabaseServerClient();
+  const { data, error } = await supabase
+    .from("filing_review_comments")
+    .select("id, preview_id, company_id, target, severity, body, created_by, acknowledged_by, acknowledged_at, created_at")
+    .in("company_id", companyIds)
+    .order("created_at", { ascending: false });
+
+  return {
+    comments: (data ?? []) as FilingReviewCommentRow[],
     error: error?.message ?? null,
   };
 }

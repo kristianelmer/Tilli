@@ -171,6 +171,19 @@ create table if not exists public.filing_submissions (
   updated_at timestamptz not null default now()
 );
 
+create table if not exists public.filing_review_comments (
+  id uuid primary key default gen_random_uuid(),
+  preview_id uuid not null references public.filing_previews(id) on delete cascade,
+  company_id uuid not null references public.companies(id) on delete cascade,
+  target text not null default 'rf1086_preview',
+  severity text not null check (severity in ('advisory', 'hard_block')),
+  body text not null check (body <> ''),
+  created_by uuid not null references auth.users(id) on delete restrict,
+  acknowledged_by uuid references auth.users(id) on delete restrict,
+  acknowledged_at timestamptz,
+  created_at timestamptz not null default now()
+);
+
 create index if not exists companies_created_by_idx on public.companies(created_by);
 create index if not exists company_memberships_user_id_idx on public.company_memberships(user_id);
 create index if not exists audit_events_company_id_created_at_idx on public.audit_events(company_id, created_at desc);
@@ -181,6 +194,7 @@ create index if not exists ledger_entries_company_id_year_idx on public.ledger_e
 create index if not exists bank_transactions_company_id_year_idx on public.bank_transactions(company_id, income_year);
 create index if not exists filing_previews_company_id_year_idx on public.filing_previews(company_id, income_year);
 create index if not exists filing_submissions_company_id_year_idx on public.filing_submissions(company_id, income_year);
+create index if not exists filing_review_comments_preview_id_idx on public.filing_review_comments(preview_id, created_at);
 
 alter table public.companies enable row level security;
 alter table public.company_memberships enable row level security;
@@ -192,6 +206,7 @@ alter table public.ledger_entries enable row level security;
 alter table public.bank_transactions enable row level security;
 alter table public.filing_previews enable row level security;
 alter table public.filing_submissions enable row level security;
+alter table public.filing_review_comments enable row level security;
 
 grant usage on schema public to authenticated;
 grant select, insert, update on public.companies to authenticated;
@@ -204,6 +219,7 @@ grant select, insert on public.ledger_entries to authenticated;
 grant select, insert, update on public.bank_transactions to authenticated;
 grant select, insert on public.filing_previews to authenticated;
 grant select, insert, update on public.filing_submissions to authenticated;
+grant select, insert, update on public.filing_review_comments to authenticated;
 
 drop policy if exists "owners can create companies" on public.companies;
 create policy "owners can create companies"
@@ -237,6 +253,21 @@ to authenticated
 with check (
   user_id = (select auth.uid())
   and role = 'owner'
+  and exists (
+    select 1
+    from public.companies c
+    where c.id = company_memberships.company_id
+      and c.created_by = (select auth.uid())
+  )
+);
+
+drop policy if exists "owners can invite company members" on public.company_memberships;
+create policy "owners can invite company members"
+on public.company_memberships for insert
+to authenticated
+with check (
+  role in ('reviewer', 'read_only')
+  and invited_by = (select auth.uid())
   and exists (
     select 1
     from public.companies c
@@ -571,6 +602,58 @@ with check (
     select 1
     from public.company_memberships m
     where m.company_id = filing_submissions.company_id
+      and m.user_id = (select auth.uid())
+      and m.role = 'owner'
+  )
+);
+
+drop policy if exists "company members can read filing review comments" on public.filing_review_comments;
+create policy "company members can read filing review comments"
+on public.filing_review_comments for select
+to authenticated
+using (
+  exists (
+    select 1
+    from public.company_memberships m
+    where m.company_id = filing_review_comments.company_id
+      and m.user_id = (select auth.uid())
+  )
+);
+
+drop policy if exists "owners and reviewers can create filing review comments" on public.filing_review_comments;
+create policy "owners and reviewers can create filing review comments"
+on public.filing_review_comments for insert
+to authenticated
+with check (
+  created_by = (select auth.uid())
+  and exists (
+    select 1
+    from public.company_memberships m
+    where m.company_id = filing_review_comments.company_id
+      and m.user_id = (select auth.uid())
+      and m.role in ('owner', 'reviewer')
+  )
+);
+
+drop policy if exists "owners can acknowledge filing review comments" on public.filing_review_comments;
+create policy "owners can acknowledge filing review comments"
+on public.filing_review_comments for update
+to authenticated
+using (
+  exists (
+    select 1
+    from public.company_memberships m
+    where m.company_id = filing_review_comments.company_id
+      and m.user_id = (select auth.uid())
+      and m.role = 'owner'
+  )
+)
+with check (
+  acknowledged_by = (select auth.uid())
+  and exists (
+    select 1
+    from public.company_memberships m
+    where m.company_id = filing_review_comments.company_id
       and m.user_id = (select auth.uid())
       and m.role = 'owner'
   )

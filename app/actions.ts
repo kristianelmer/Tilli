@@ -17,6 +17,7 @@ import {
 } from "./lib/opening-balance";
 import { simulateRf1086SubmissionWithPython } from "./lib/rf1086-submission";
 import { buildNoActivityRf1086Case, renderRf1086PreviewWithPython } from "./lib/rf1086";
+import { assertAdvisoryCanBeAcknowledged, assertNoHardReviewBlocks } from "./lib/review";
 import { createSupabaseServerClient, hasSupabaseEnv } from "./lib/supabase/server";
 
 function formString(formData: FormData, key: string) {
@@ -377,6 +378,19 @@ export async function confirmSimulatedRf1086Submission(formData: FormData) {
   if (previewError || !preview) {
     redirect(`/?error=${encodeURIComponent(previewError?.message ?? "Fant ikke RF-1086 forhåndsvisning")}`);
   }
+  const { data: blockingComments, error: blockingCommentError } = await supabase
+    .from("filing_review_comments")
+    .select("id")
+    .eq("preview_id", preview.id)
+    .eq("severity", "hard_block");
+  if (blockingCommentError) {
+    redirect(`/?error=${encodeURIComponent(blockingCommentError.message)}`);
+  }
+  try {
+    assertNoHardReviewBlocks((blockingComments ?? []).map(() => ({ severity: "hard_block" })));
+  } catch (error) {
+    redirect(`/?error=${encodeURIComponent(error instanceof Error ? error.message : "Hard review-blokk")}`);
+  }
 
   let simulated;
   try {
@@ -421,6 +435,151 @@ export async function confirmSimulatedRf1086Submission(formData: FormData) {
     category: "filing",
     action: "rf1086_simulated_receipt_archived",
     message: `Simulert RF-1086-kvittering arkivert for ${preview.income_year}.`,
+  });
+
+  revalidatePath("/");
+  redirect("/");
+}
+
+export async function inviteWorkspaceReviewer(formData: FormData) {
+  if (!hasSupabaseEnv()) {
+    redirect("/?error=Supabase%20env%20mangler");
+  }
+  const supabase = await createSupabaseServerClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+  if (!user) {
+    redirect("/?error=Innlogging%20kreves");
+  }
+
+  const companyId = formString(formData, "companyId");
+  const userId = formString(formData, "userId");
+  const role = formString(formData, "role") || "reviewer";
+  if (!["reviewer", "read_only"].includes(role)) {
+    redirect("/?error=Ugyldig%20reviewer-rolle");
+  }
+
+  const { error } = await supabase.from("company_memberships").insert({
+    company_id: companyId,
+    user_id: userId,
+    role,
+    invited_by: user.id,
+    accepted_at: new Date().toISOString(),
+  });
+  if (error) {
+    redirect(`/?error=${encodeURIComponent(error.message)}`);
+  }
+
+  await supabase.from("audit_events").insert({
+    company_id: companyId,
+    actor_id: user.id,
+    category: "review",
+    action: "reviewer_invited",
+    message: `Reviewer/read-only tilgang lagt til: ${role}.`,
+  });
+
+  revalidatePath("/");
+  redirect("/");
+}
+
+export async function addFilingReviewComment(formData: FormData) {
+  if (!hasSupabaseEnv()) {
+    redirect("/?error=Supabase%20env%20mangler");
+  }
+  const supabase = await createSupabaseServerClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+  if (!user) {
+    redirect("/?error=Innlogging%20kreves");
+  }
+
+  const previewId = formString(formData, "previewId");
+  const severity = formString(formData, "severity") || "advisory";
+  const body = formString(formData, "body");
+  if (!["advisory", "hard_block"].includes(severity)) {
+    redirect("/?error=Ugyldig%20kommentaralvorlighet");
+  }
+  if (!body) {
+    redirect("/?error=Kommentar%20mangler");
+  }
+
+  const { data: preview, error: previewError } = await supabase
+    .from("filing_previews")
+    .select("id, company_id")
+    .eq("id", previewId)
+    .single();
+  if (previewError || !preview) {
+    redirect(`/?error=${encodeURIComponent(previewError?.message ?? "Fant ikke forhåndsvisning")}`);
+  }
+
+  const { error } = await supabase.from("filing_review_comments").insert({
+    preview_id: preview.id,
+    company_id: preview.company_id,
+    target: "rf1086_preview",
+    severity,
+    body,
+    created_by: user.id,
+  });
+  if (error) {
+    redirect(`/?error=${encodeURIComponent(error.message)}`);
+  }
+
+  await supabase.from("audit_events").insert({
+    company_id: preview.company_id,
+    actor_id: user.id,
+    category: "review",
+    action: "filing_review_comment_created",
+    message: `Review-kommentar lagt til: ${severity}.`,
+  });
+
+  revalidatePath("/");
+  redirect("/");
+}
+
+export async function acknowledgeFilingReviewComment(formData: FormData) {
+  if (!hasSupabaseEnv()) {
+    redirect("/?error=Supabase%20env%20mangler");
+  }
+  const supabase = await createSupabaseServerClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+  if (!user) {
+    redirect("/?error=Innlogging%20kreves");
+  }
+
+  const commentId = formString(formData, "commentId");
+  const { data: comment, error: commentError } = await supabase
+    .from("filing_review_comments")
+    .select("id, company_id, severity")
+    .eq("id", commentId)
+    .single();
+  if (commentError || !comment) {
+    redirect(`/?error=${encodeURIComponent(commentError?.message ?? "Fant ikke review-kommentar")}`);
+  }
+  try {
+    assertAdvisoryCanBeAcknowledged({ severity: comment.severity });
+  } catch (error) {
+    redirect(`/?error=${encodeURIComponent(error instanceof Error ? error.message : "Hard review-blokk")}`);
+  }
+
+  const acknowledgedAt = new Date().toISOString();
+  const { error } = await supabase
+    .from("filing_review_comments")
+    .update({ acknowledged_by: user.id, acknowledged_at: acknowledgedAt })
+    .eq("id", comment.id);
+  if (error) {
+    redirect(`/?error=${encodeURIComponent(error.message)}`);
+  }
+
+  await supabase.from("audit_events").insert({
+    company_id: comment.company_id,
+    actor_id: user.id,
+    category: "review",
+    action: "filing_review_comment_acknowledged",
+    message: "Advisory review-kommentar acknowledged av eier.",
   });
 
   revalidatePath("/");
