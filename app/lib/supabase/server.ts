@@ -154,7 +154,7 @@ export type HoldingActionRow = {
   id: string;
   company_id: string;
   income_year: number;
-  action_type: "dividend_received" | "share_purchase";
+  action_type: "dividend_received" | "share_purchase" | "share_sale";
   action_date: string;
   payload: Record<string, unknown>;
   ledger_entry_id: string | null;
@@ -176,6 +176,7 @@ export type InvestmentPositionRow = {
   org_number: string | null;
   share_count: number;
   cost_basis: number;
+  movements: unknown[];
   created_by: string;
   created_at: string;
   updated_at: string;
@@ -394,7 +395,7 @@ export async function listInvestmentPositions(companyIds: string[]) {
   const supabase = await createSupabaseServerClient();
   const { data, error } = await supabase
     .from("investment_positions")
-    .select("id, company_id, investment_key, name, kind, tax_treatment, org_number, share_count, cost_basis, created_by, created_at, updated_at")
+    .select("id, company_id, investment_key, name, kind, tax_treatment, org_number, share_count, cost_basis, movements, created_by, created_at, updated_at")
     .in("company_id", companyIds)
     .order("updated_at", { ascending: false });
 

@@ -22,6 +22,7 @@ import { buildNoActivityRf1086Case, renderRf1086PreviewWithPython } from "../app
 import { simulateRf1086SubmissionWithPython } from "../app/lib/rf1086-submission.ts";
 import { assertAdvisoryCanBeAcknowledged, assertNoHardReviewBlocks } from "../app/lib/review.ts";
 import { sharePurchaseLedgerLines, validateSharePurchase } from "../app/lib/share-purchase.ts";
+import { shareSaleLedgerLines, validateShareSale } from "../app/lib/share-sale.ts";
 
 const requiredEnv = ["SUPABASE_URL", "SUPABASE_ANON_KEY", "SUPABASE_SERVICE_ROLE_KEY"];
 
@@ -987,6 +988,191 @@ test(
       created_by: outsiderUser.id,
     });
     assert.ok(outsiderPurchasePositionInsertError);
+
+    assert.throws(
+      () =>
+        validateShareSale({
+          positionId: purchasePosition.id,
+          investmentKey: "portfolio-as",
+          investmentName: "Portfolio AS",
+          currentShareCount: 100,
+          currentCostBasis: 50000,
+          saleDate: "2025-08-01",
+          soldShareCount: 101,
+          proceeds: 30000,
+          documentStatus: "attached",
+        }),
+      (error) => error?.code === "sale_exceeds_position",
+    );
+    const saleDocumentId = randomUUID();
+    const { error: saleDocumentError } = await owner.from("documents").insert({
+      id: saleDocumentId,
+      company_id: companyId,
+      income_year: 2025,
+      document_type: "share_sale_agreement",
+      name: "sale.pdf",
+      linked_to: "share_sale",
+      status: "attached",
+      storage_key: `companies/${companyId}/2025/${saleDocumentId}/sale.pdf`,
+      created_by: ownerUser.id,
+    });
+    assert.ifError(saleDocumentError);
+    const { data: saleBankTransaction, error: saleBankTransactionError } = await owner
+      .from("bank_transactions")
+      .insert({
+        company_id: companyId,
+        income_year: 2025,
+        transaction_date: "2025-08-01",
+        text: "Sale Portfolio AS",
+        amount: 30000,
+        balance: 10950,
+        source_hash: `sale-bank-${randomUUID()}`,
+        created_by: ownerUser.id,
+      })
+      .select("id, amount")
+      .single();
+    assert.ifError(saleBankTransactionError);
+    const salePayload = validateShareSale({
+      positionId: purchasePosition.id,
+      investmentKey: "portfolio-as",
+      investmentName: "Portfolio AS",
+      currentShareCount: 100,
+      currentCostBasis: 50000,
+      saleDate: "2025-08-01",
+      soldShareCount: 40,
+      proceeds: 30000,
+      bankTransactionId: saleBankTransaction.id,
+      documentId: saleDocumentId,
+      documentStatus: "attached",
+    });
+    assert.equal(salePayload.cost_basis_reduction, 20000);
+    assert.equal(salePayload.gain_or_loss, 10000);
+    const saleLines = shareSaleLedgerLines(salePayload);
+    const { data: saleEntry, error: saleEntryError } = await owner
+      .from("ledger_entries")
+      .insert({
+        company_id: companyId,
+        income_year: 2025,
+        entry_type: "share_sale",
+        memo: "Share sale: Portfolio AS",
+        lines: saleLines,
+        created_by: ownerUser.id,
+      })
+      .select("id, entry_type, lines")
+      .single();
+    assert.ifError(saleEntryError);
+    assert.deepEqual(saleEntry.lines, saleLines);
+    const saleActionId = randomUUID();
+    const { data: saleAction, error: saleActionError } = await owner
+      .from("holding_actions")
+      .insert({
+        id: saleActionId,
+        company_id: companyId,
+        income_year: 2025,
+        action_type: "share_sale",
+        action_date: salePayload.sale_date,
+        payload: salePayload,
+        ledger_entry_id: saleEntry.id,
+        bank_transaction_id: saleBankTransaction.id,
+        document_id: saleDocumentId,
+        risk_level: "ready",
+        created_by: ownerUser.id,
+      })
+      .select("id, action_type, ledger_entry_id, bank_transaction_id, document_id")
+      .single();
+    assert.ifError(saleActionError);
+    assert.equal(saleAction.action_type, "share_sale");
+    const saleMovement = {
+      action_id: saleAction.id,
+      movement_type: "sale",
+      movement_date: salePayload.sale_date,
+      share_delta: -salePayload.sold_share_count,
+      cost_basis_delta: -salePayload.cost_basis_reduction,
+      amount: salePayload.proceeds,
+      gain_or_loss: salePayload.gain_or_loss,
+    };
+    const { error: salePositionUpdateError } = await owner
+      .from("investment_positions")
+      .update({
+        share_count: salePayload.remaining_share_count,
+        cost_basis: salePayload.remaining_cost_basis,
+        movements: [saleMovement],
+        updated_at: new Date().toISOString(),
+      })
+      .eq("id", purchasePosition.id);
+    assert.ifError(salePositionUpdateError);
+    const { error: saleBankMatchError } = await owner
+      .from("bank_transactions")
+      .update({ matched_action_id: saleAction.id })
+      .eq("id", saleBankTransaction.id);
+    assert.ifError(saleBankMatchError);
+    const { data: positionAfterPartialSale, error: partialSaleReloadError } = await owner
+      .from("investment_positions")
+      .select("id, share_count, cost_basis, movements")
+      .eq("id", purchasePosition.id)
+      .single();
+    assert.ifError(partialSaleReloadError);
+    assert.equal(Number(positionAfterPartialSale.share_count), 60);
+    assert.equal(Number(positionAfterPartialSale.cost_basis), 30000);
+    assert.equal(positionAfterPartialSale.movements[0].gain_or_loss, 10000);
+
+    const fullSalePayload = validateShareSale({
+      positionId: purchasePosition.id,
+      investmentKey: "portfolio-as",
+      investmentName: "Portfolio AS",
+      currentShareCount: 60,
+      currentCostBasis: 30000,
+      saleDate: "2025-09-01",
+      soldShareCount: 60,
+      proceeds: 30000,
+      documentStatus: "not_required",
+    });
+    assert.equal(fullSalePayload.remaining_share_count, 0);
+    assert.equal(fullSalePayload.remaining_cost_basis, 0);
+    const { error: fullSalePositionUpdateError } = await owner
+      .from("investment_positions")
+      .update({
+        share_count: fullSalePayload.remaining_share_count,
+        cost_basis: fullSalePayload.remaining_cost_basis,
+        movements: [
+          ...positionAfterPartialSale.movements,
+          {
+            action_id: "full-sale-test",
+            movement_type: "sale",
+            movement_date: fullSalePayload.sale_date,
+            share_delta: -fullSalePayload.sold_share_count,
+            cost_basis_delta: -fullSalePayload.cost_basis_reduction,
+            amount: fullSalePayload.proceeds,
+            gain_or_loss: fullSalePayload.gain_or_loss,
+          },
+        ],
+        updated_at: new Date().toISOString(),
+      })
+      .eq("id", purchasePosition.id);
+    assert.ifError(fullSalePositionUpdateError);
+    const { data: positionAfterFullSale, error: fullSaleReloadError } = await owner
+      .from("investment_positions")
+      .select("share_count, cost_basis, movements")
+      .eq("id", purchasePosition.id)
+      .single();
+    assert.ifError(fullSaleReloadError);
+    assert.equal(Number(positionAfterFullSale.share_count), 0);
+    assert.equal(Number(positionAfterFullSale.cost_basis), 0);
+    assert.equal(positionAfterFullSale.movements.length, 2);
+
+    const { error: outsiderSaleActionInsertError } = await outsider.from("holding_actions").insert({
+      company_id: companyId,
+      income_year: 2025,
+      action_type: "share_sale",
+      action_date: salePayload.sale_date,
+      payload: salePayload,
+      ledger_entry_id: saleEntry.id,
+      bank_transaction_id: saleBankTransaction.id,
+      document_id: saleDocumentId,
+      risk_level: "ready",
+      created_by: outsiderUser.id,
+    });
+    assert.ok(outsiderSaleActionInsertError);
 
     const manualJournal = validateManualJournal({
       warningAccepted: true,

@@ -141,7 +141,7 @@ create table if not exists public.holding_actions (
   id uuid primary key default gen_random_uuid(),
   company_id uuid not null references public.companies(id) on delete cascade,
   income_year integer not null check (income_year between 2000 and 2100),
-  action_type text not null check (action_type in ('dividend_received', 'share_purchase')),
+  action_type text not null check (action_type in ('dividend_received', 'share_purchase', 'share_sale')),
   action_date date not null,
   payload jsonb not null default '{}'::jsonb,
   ledger_entry_id uuid references public.ledger_entries(id) on delete restrict,
@@ -155,7 +155,7 @@ create table if not exists public.holding_actions (
 
 alter table public.holding_actions drop constraint if exists holding_actions_action_type_check;
 alter table public.holding_actions
-  add constraint holding_actions_action_type_check check (action_type in ('dividend_received', 'share_purchase'));
+  add constraint holding_actions_action_type_check check (action_type in ('dividend_received', 'share_purchase', 'share_sale'));
 
 create table if not exists public.investment_positions (
   id uuid primary key default gen_random_uuid(),
@@ -167,11 +167,14 @@ create table if not exists public.investment_positions (
   org_number text check (org_number is null or org_number ~ '^[0-9]{9}$'),
   share_count numeric not null check (share_count >= 0),
   cost_basis numeric not null check (cost_basis >= 0),
+  movements jsonb not null default '[]'::jsonb,
   created_by uuid not null references auth.users(id) on delete restrict,
   created_at timestamptz not null default now(),
   updated_at timestamptz not null default now(),
   unique (company_id, investment_key)
 );
+
+alter table public.investment_positions add column if not exists movements jsonb not null default '[]'::jsonb;
 
 create table if not exists public.filing_previews (
   id uuid primary key default gen_random_uuid(),

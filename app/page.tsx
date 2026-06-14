@@ -13,6 +13,7 @@ import {
   recordAdminCost,
   recordDividendReceived,
   recordSharePurchase,
+  recordShareSale,
   signIn,
   signOut,
   signUp,
@@ -899,6 +900,7 @@ export default async function Home({ searchParams }: HomeProps) {
                       <strong data-status="ready">{position.name}</strong>
                       <p>{Number(position.share_count).toFixed(2)} aksjer</p>
                       <p>Kostpris: {Number(position.cost_basis).toFixed(2)} kr</p>
+                      <p>Bevegelser: {position.movements.length}</p>
                     </div>
                   ))}
                   {positions.length === 0 ? (
@@ -909,6 +911,80 @@ export default async function Home({ searchParams }: HomeProps) {
                     </div>
                   ) : null}
                 </div>
+              </section>
+
+              <section className="band">
+                <div className="sectionHeader">
+                  <p className="eyebrow">Aksjesalg</p>
+                  <h2>Selg fra eksisterende investeringsposisjon.</h2>
+                </div>
+                <form className="dataPanel formPanel widePanel" action={recordShareSale}>
+                  <input name="companyId" type="hidden" value={primaryCompanyId} />
+                  <label>
+                    Inntektsår
+                    <input name="incomeYear" inputMode="numeric" defaultValue="2025" required />
+                  </label>
+                  <label>
+                    Posisjon
+                    <select name="positionId" required>
+                      <option value="">Velg posisjon</option>
+                      {positions
+                        .filter((position) => Number(position.share_count) > 0)
+                        .map((position) => (
+                          <option key={position.id} value={position.id}>
+                            {position.name} ({Number(position.share_count).toFixed(2)} aksjer)
+                          </option>
+                        ))}
+                    </select>
+                  </label>
+                  <label>
+                    Salgsdato
+                    <input name="saleDate" defaultValue="2025-08-01" required />
+                  </label>
+                  <label>
+                    Solgte aksjer
+                    <input name="soldShareCount" inputMode="decimal" defaultValue="40" required />
+                  </label>
+                  <label>
+                    Salgsproveny
+                    <input name="proceeds" inputMode="decimal" defaultValue="30000" required />
+                  </label>
+                  <label>
+                    Banktransaksjon
+                    <select name="bankTransactionId" defaultValue="">
+                      <option value="">Ingen bankmatch</option>
+                      {unmatchedTransactions
+                        .filter((transaction) => Number(transaction.amount) > 0)
+                        .map((transaction) => (
+                          <option key={transaction.id} value={transaction.id}>
+                            {transaction.transaction_date} {transaction.text} {Number(transaction.amount).toFixed(2)} kr
+                          </option>
+                        ))}
+                    </select>
+                  </label>
+                  <label>
+                    Bilag
+                    <select name="documentId" defaultValue="">
+                      <option value="">Ingen bilagskobling</option>
+                      {documents.map((document) => (
+                        <option key={document.id} value={document.id}>
+                          {document.name}
+                        </option>
+                      ))}
+                    </select>
+                  </label>
+                  <label>
+                    Dokumentstatus
+                    <select name="documentStatus" defaultValue="attached">
+                      <option value="attached">Vedlagt</option>
+                      <option value="missing_accepted_warning">Mangler, akseptert varsel</option>
+                      <option value="not_required">Ikke påkrevd</option>
+                    </select>
+                  </label>
+                  <button className="secondaryButton" type="submit">
+                    Poster aksjesalg
+                  </button>
+                </form>
               </section>
 
               <section className="band">
