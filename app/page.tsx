@@ -1,5 +1,5 @@
-import { createWorkspace, signIn, signOut, signUp } from "./actions";
-import { getCurrentUser, hasSupabaseEnv, listCompanyWorkspaces } from "./lib/supabase/server";
+import { createWorkspace, signIn, signOut, signUp, uploadDocument } from "./actions";
+import { getCurrentUser, hasSupabaseEnv, listCompanyWorkspaces, listDocumentsForCompanies } from "./lib/supabase/server";
 
 type HomeProps = {
   searchParams?: Promise<{ error?: string }>;
@@ -24,6 +24,7 @@ export default async function Home({ searchParams }: HomeProps) {
   const params = await searchParams;
   const user = await getCurrentUser();
   const { companies, error } = user ? await listCompanyWorkspaces() : { companies: [], error: null };
+  const { documents } = user ? await listDocumentsForCompanies(companies.map((company) => company.id)) : { documents: [] };
 
   return (
     <main className="shell">
@@ -170,6 +171,46 @@ export default async function Home({ searchParams }: HomeProps) {
               ) : null}
             </div>
           </section>
+
+          {companies.length > 0 ? (
+            <section className="band">
+              <div className="sectionHeader">
+                <p className="eyebrow">Dokumenter</p>
+                <h2>Privat lagring med signert nedlasting.</h2>
+              </div>
+              <form className="dataPanel formPanel widePanel" action={uploadDocument}>
+                <input name="companyId" type="hidden" value={companies[0].id} />
+                <label>
+                  Inntektsår
+                  <input name="incomeYear" inputMode="numeric" defaultValue="2025" required />
+                </label>
+                <label>
+                  Dokumenttype
+                  <input name="documentType" defaultValue="bank_statement" required />
+                </label>
+                <label>
+                  Knyttet til
+                  <input name="linkedTo" defaultValue="aksjonærregisteroppgaven" required />
+                </label>
+                <label>
+                  Fil
+                  <input name="file" type="file" required />
+                </label>
+                <button className="primaryButton" type="submit">
+                  Last opp dokument
+                </button>
+              </form>
+              <div className="table">
+                {documents.map((document) => (
+                  <div className="tableRow" key={document.id}>
+                    <span>{document.name}</span>
+                    <span>{document.linked_to}</span>
+                    <a href={`/documents/${document.id}/download`}>Signert nedlasting</a>
+                  </div>
+                ))}
+              </div>
+            </section>
+          ) : null}
         </>
       )}
 

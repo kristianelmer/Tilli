@@ -3,6 +3,7 @@
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { fetchBrregEntity } from "./lib/brreg";
+import { COMPANY_DOCUMENTS_BUCKET, documentStorageKey } from "./lib/documents";
 import { createSupabaseServerClient, hasSupabaseEnv } from "./lib/supabase/server";
 
 function formString(formData: FormData, key: string) {
@@ -114,6 +115,65 @@ export async function createWorkspace(formData: FormData) {
     category: "company",
     action: "workspace_created",
     message: "Selskapsarbeidsflate opprettet.",
+  });
+
+  revalidatePath("/");
+  redirect("/");
+}
+
+export async function uploadDocument(formData: FormData) {
+  if (!hasSupabaseEnv()) {
+    redirect("/?error=Supabase%20env%20mangler");
+  }
+  const supabase = await createSupabaseServerClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+  if (!user) {
+    redirect("/?error=Innlogging%20kreves");
+  }
+
+  const companyId = formString(formData, "companyId");
+  const incomeYear = Number(formString(formData, "incomeYear") || "2025");
+  const documentType = formString(formData, "documentType") || "accounting_document";
+  const linkedTo = formString(formData, "linkedTo") || "workspace";
+  const file = formData.get("file");
+  if (!(file instanceof File) || file.size === 0) {
+    redirect("/?error=Velg%20dokument%20for%20opplasting");
+  }
+
+  const documentId = crypto.randomUUID();
+  const storageKey = documentStorageKey(companyId, incomeYear, documentId, file.name);
+  const { error: uploadError } = await supabase.storage.from(COMPANY_DOCUMENTS_BUCKET).upload(storageKey, file, {
+    contentType: file.type || "application/octet-stream",
+    upsert: false,
+  });
+  if (uploadError) {
+    redirect(`/?error=${encodeURIComponent(uploadError.message)}`);
+  }
+
+  const { error: metadataError } = await supabase.from("documents").insert({
+    id: documentId,
+    company_id: companyId,
+    income_year: incomeYear,
+    document_type: documentType,
+    name: file.name,
+    linked_to: linkedTo,
+    status: "attached",
+    retention_years: 5,
+    storage_key: storageKey,
+    created_by: user.id,
+  });
+  if (metadataError) {
+    redirect(`/?error=${encodeURIComponent(metadataError.message)}`);
+  }
+
+  await supabase.from("audit_events").insert({
+    company_id: companyId,
+    actor_id: user.id,
+    category: "document",
+    action: "document_uploaded",
+    message: `Dokument lastet opp: ${file.name}.`,
   });
 
   revalidatePath("/");

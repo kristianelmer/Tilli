@@ -7,6 +7,8 @@ import test from "node:test";
 import { createClient } from "@supabase/supabase-js";
 import pg from "pg";
 
+import { COMPANY_DOCUMENTS_BUCKET, documentStorageKey } from "../app/lib/documents.ts";
+
 const requiredEnv = ["SUPABASE_URL", "SUPABASE_ANON_KEY", "SUPABASE_SERVICE_ROLE_KEY"];
 
 function loadDotenv() {
@@ -205,6 +207,56 @@ test(
       .eq("company_id", companyId);
     assert.ifError(outsiderMembershipError);
     assert.deepEqual(outsiderMemberships, []);
+
+    const documentId = randomUUID();
+    const storageKey = documentStorageKey(companyId, 2025, documentId, "bank.pdf");
+    const { error: uploadError } = await owner.storage
+      .from(COMPANY_DOCUMENTS_BUCKET)
+      .upload(storageKey, new Blob(["test"], { type: "application/pdf" }), {
+        contentType: "application/pdf",
+      });
+    assert.ifError(uploadError);
+
+    const { error: documentInsertError } = await owner.from("documents").insert({
+      id: documentId,
+      company_id: companyId,
+      income_year: 2025,
+      document_type: "bank_statement",
+      name: "bank.pdf",
+      linked_to: "aksjonærregisteroppgaven",
+      status: "attached",
+      storage_key: storageKey,
+      created_by: ownerUser.id,
+    });
+    assert.ifError(documentInsertError);
+
+    const { data: ownerDocuments, error: ownerDocumentError } = await owner
+      .from("documents")
+      .select("id, storage_key")
+      .eq("id", documentId);
+    assert.ifError(ownerDocumentError);
+    assert.equal(ownerDocuments.length, 1);
+
+    const { data: signed, error: signedError } = await owner.storage
+      .from(COMPANY_DOCUMENTS_BUCKET)
+      .createSignedUrl(storageKey, 60);
+    assert.ifError(signedError);
+    assert.ok(signed.signedUrl.includes("/storage/v1/"));
+
+    const { data: outsiderDocuments, error: outsiderDocumentError } = await outsider
+      .from("documents")
+      .select("id")
+      .eq("id", documentId);
+    assert.ifError(outsiderDocumentError);
+    assert.deepEqual(outsiderDocuments, []);
+
+    const { data: outsiderSigned, error: outsiderSignedError } = await outsider.storage
+      .from(COMPANY_DOCUMENTS_BUCKET)
+      .createSignedUrl(storageKey, 60);
+    assert.equal(outsiderSigned, null);
+    assert.ok(outsiderSignedError);
+
+    await owner.storage.from(COMPANY_DOCUMENTS_BUCKET).remove([storageKey]);
   } finally {
     if (companyId) {
       await admin.from("companies").delete().eq("id", companyId);

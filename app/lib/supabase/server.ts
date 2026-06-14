@@ -24,6 +24,20 @@ export type CompanyMembershipRow = {
   accepted_at: string | null;
 };
 
+export type DocumentRow = {
+  id: string;
+  company_id: string;
+  income_year: number;
+  document_type: string;
+  name: string;
+  linked_to: string;
+  status: string;
+  retention_years: number;
+  storage_key: string;
+  created_by: string;
+  created_at: string;
+};
+
 export function hasSupabaseEnv() {
   return Boolean(process.env.SUPABASE_URL && process.env.SUPABASE_ANON_KEY);
 }
@@ -69,6 +83,23 @@ export async function listCompanyWorkspaces() {
 
   return {
     companies: (data ?? []) as CompanyWorkspaceRow[],
+    error: error?.message ?? null,
+  };
+}
+
+export async function listDocumentsForCompanies(companyIds: string[]) {
+  if (!hasSupabaseEnv() || companyIds.length === 0) {
+    return { documents: [] as DocumentRow[], error: null };
+  }
+  const supabase = await createSupabaseServerClient();
+  const { data, error } = await supabase
+    .from("documents")
+    .select("id, company_id, income_year, document_type, name, linked_to, status, retention_years, storage_key, created_by, created_at")
+    .in("company_id", companyIds)
+    .order("created_at", { ascending: false });
+
+  return {
+    documents: (data ?? []) as DocumentRow[],
     error: error?.message ?? null,
   };
 }
