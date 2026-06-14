@@ -10,6 +10,7 @@
     "test:bank": "node --experimental-strip-types --test tests/bank_workflow.test.mjs",
     "test:brreg": "node --experimental-strip-types --test tests/brreg.test.mjs",
     "test:deadlines": "node --experimental-strip-types --test tests/deadlines.test.mjs",
+    "test:dividend-received": "node --experimental-strip-types --test tests/dividend_received.test.mjs",
     "test:documents": "node --experimental-strip-types --test tests/documents.test.mjs",
     "test:filing-overrides": "node --experimental-strip-types --test tests/filing_overrides.test.mjs",
     "test:manual-journal": "node --experimental-strip-types --test tests/manual_journal.test.mjs",

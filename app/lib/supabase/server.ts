@@ -150,6 +150,22 @@ export type BankTransactionRow = {
   created_at: string;
 };
 
+export type HoldingActionRow = {
+  id: string;
+  company_id: string;
+  income_year: number;
+  action_type: "dividend_received";
+  action_date: string;
+  payload: Record<string, unknown>;
+  ledger_entry_id: string | null;
+  bank_transaction_id: string | null;
+  document_id: string | null;
+  risk_level: "ready" | "warning" | "block";
+  blocker_code: string | null;
+  created_by: string;
+  created_at: string;
+};
+
 export type FilingReviewCommentRow = {
   id: string;
   preview_id: string;
@@ -335,6 +351,23 @@ export async function listBankTransactions(companyIds: string[]) {
 
   return {
     transactions: (data ?? []) as BankTransactionRow[],
+    error: error?.message ?? null,
+  };
+}
+
+export async function listHoldingActions(companyIds: string[]) {
+  if (!hasSupabaseEnv() || companyIds.length === 0) {
+    return { actions: [] as HoldingActionRow[], error: null };
+  }
+  const supabase = await createSupabaseServerClient();
+  const { data, error } = await supabase
+    .from("holding_actions")
+    .select("id, company_id, income_year, action_type, action_date, payload, ledger_entry_id, bank_transaction_id, document_id, risk_level, blocker_code, created_by, created_at")
+    .in("company_id", companyIds)
+    .order("action_date", { ascending: false });
+
+  return {
+    actions: (data ?? []) as HoldingActionRow[],
     error: error?.message ?? null,
   };
 }

@@ -10,6 +10,11 @@ import {
 } from "./lib/bank";
 import { assertSupportedBrregIdentity, fetchBrregEntity } from "./lib/brreg";
 import { COMPANY_DOCUMENTS_BUCKET, documentStorageKey } from "./lib/documents";
+import {
+  DividendReceivedValidationError,
+  dividendReceivedLedgerLines,
+  validateDividendReceived,
+} from "./lib/dividend-received";
 import { assertNoBlockingFilingOverrides, validateFilingOverride } from "./lib/filing-overrides";
 import { validateManualJournal } from "./lib/manual-journal";
 import {
@@ -848,6 +853,136 @@ export async function recordAdminCost(formData: FormData) {
     category: "bank",
     action: "admin_cost_posted_and_matched",
     message: `Administrasjonskostnad postert og avstemt for ${incomeYear}.`,
+  });
+
+  revalidatePath("/");
+  redirect("/");
+}
+
+export async function recordDividendReceived(formData: FormData) {
+  if (!hasSupabaseEnv()) {
+    redirect("/?error=Supabase%20env%20mangler");
+  }
+  const supabase = await createSupabaseServerClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+  if (!user) {
+    redirect("/?error=Innlogging%20kreves");
+  }
+
+  const companyId = formString(formData, "companyId");
+  const incomeYear = Number(formString(formData, "incomeYear") || "2025");
+  const bankTransactionId = formString(formData, "bankTransactionId") || null;
+  const documentId = formString(formData, "documentId") || null;
+  let payload;
+  try {
+    payload = validateDividendReceived({
+      payingCompanyName: formString(formData, "payingCompanyName"),
+      declaredDate: formString(formData, "declaredDate"),
+      paidDate: formString(formData, "paidDate"),
+      grossAmount: Number(formString(formData, "grossAmount")),
+      linkedInvestmentId: formString(formData, "linkedInvestmentId"),
+      taxTreatment: formString(formData, "taxTreatment") as "fritaksmetoden" | "outside_fritaksmetoden" | "needs_accountant",
+      bankTransactionId,
+      documentId,
+      documentStatus: formString(formData, "documentStatus") as "attached" | "missing_accepted_warning" | "not_required",
+    });
+  } catch (error) {
+    const message =
+      error instanceof DividendReceivedValidationError
+        ? `${error.code}: ${error.message}`
+        : error instanceof Error
+          ? error.message
+          : "Ugyldig mottatt utbytte";
+    redirect(`/?error=${encodeURIComponent(message)}`);
+  }
+
+  if (bankTransactionId) {
+    const { data: transaction, error: transactionError } = await supabase
+      .from("bank_transactions")
+      .select("id, company_id, income_year, amount, matched_entry_id, matched_action_id, accepted_warning")
+      .eq("id", bankTransactionId)
+      .single();
+    if (transactionError || !transaction) {
+      redirect(`/?error=${encodeURIComponent(transactionError?.message ?? "Fant ikke banktransaksjon")}`);
+    }
+    if (transaction.company_id !== companyId || Number(transaction.income_year) !== incomeYear) {
+      redirect("/?error=Banktransaksjonen%20tilh%C3%B8rer%20ikke%20valgt%20selskap%20og%20%C3%A5r");
+    }
+    if (transaction.matched_entry_id || transaction.matched_action_id || transaction.accepted_warning) {
+      redirect("/?error=Banktransaksjonen%20er%20allerede%20avstemt");
+    }
+    if (Number(transaction.amount) !== payload.gross_amount) {
+      redirect("/?error=Banktransaksjonen%20m%C3%A5%20matche%20brutto%20utbytte");
+    }
+  }
+  if (documentId) {
+    const { data: document, error: documentError } = await supabase
+      .from("documents")
+      .select("id, company_id, income_year")
+      .eq("id", documentId)
+      .single();
+    if (documentError || !document) {
+      redirect(`/?error=${encodeURIComponent(documentError?.message ?? "Fant ikke bilag")}`);
+    }
+    if (document.company_id !== companyId || Number(document.income_year) !== incomeYear) {
+      redirect("/?error=Bilaget%20tilh%C3%B8rer%20ikke%20valgt%20selskap%20og%20%C3%A5r");
+    }
+  }
+
+  const lines = dividendReceivedLedgerLines(payload);
+  const { data: entry, error: entryError } = await supabase
+    .from("ledger_entries")
+    .insert({
+      company_id: companyId,
+      income_year: incomeYear,
+      entry_type: "dividend_received",
+      memo: `Dividend received from ${payload.paying_company_name}`,
+      lines,
+      risk_flags: [],
+      created_by: user.id,
+    })
+    .select("id")
+    .single();
+  if (entryError || !entry) {
+    redirect(`/?error=${encodeURIComponent(entryError?.message ?? "Kunne ikke postere mottatt utbytte")}`);
+  }
+
+  const actionId = crypto.randomUUID();
+  const { error: actionError } = await supabase.from("holding_actions").insert({
+    id: actionId,
+    company_id: companyId,
+    income_year: incomeYear,
+    action_type: "dividend_received",
+    action_date: payload.paid_date,
+    payload,
+    ledger_entry_id: entry.id,
+    bank_transaction_id: bankTransactionId,
+    document_id: documentId,
+    risk_level: "ready",
+    created_by: user.id,
+  });
+  if (actionError) {
+    redirect(`/?error=${encodeURIComponent(actionError.message)}`);
+  }
+
+  if (bankTransactionId) {
+    const { error: matchError } = await supabase
+      .from("bank_transactions")
+      .update({ matched_action_id: actionId })
+      .eq("id", bankTransactionId);
+    if (matchError) {
+      redirect(`/?error=${encodeURIComponent(matchError.message)}`);
+    }
+  }
+
+  await supabase.from("audit_events").insert({
+    company_id: companyId,
+    actor_id: user.id,
+    category: "ledger",
+    action: "dividend_received_recorded",
+    message: `Mottatt utbytte postert fra ${payload.paying_company_name} for ${incomeYear}.`,
   });
 
   revalidatePath("/");

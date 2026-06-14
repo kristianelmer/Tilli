@@ -137,6 +137,22 @@ create table if not exists public.bank_transactions (
   unique (company_id, income_year, source_hash)
 );
 
+create table if not exists public.holding_actions (
+  id uuid primary key default gen_random_uuid(),
+  company_id uuid not null references public.companies(id) on delete cascade,
+  income_year integer not null check (income_year between 2000 and 2100),
+  action_type text not null check (action_type in ('dividend_received')),
+  action_date date not null,
+  payload jsonb not null default '{}'::jsonb,
+  ledger_entry_id uuid references public.ledger_entries(id) on delete restrict,
+  bank_transaction_id uuid references public.bank_transactions(id) on delete set null,
+  document_id uuid references public.documents(id) on delete set null,
+  risk_level text not null default 'ready' check (risk_level in ('ready', 'warning', 'block')),
+  blocker_code text,
+  created_by uuid not null references auth.users(id) on delete restrict,
+  created_at timestamptz not null default now()
+);
+
 create table if not exists public.filing_previews (
   id uuid primary key default gen_random_uuid(),
   company_id uuid not null references public.companies(id) on delete cascade,
@@ -228,6 +244,8 @@ create index if not exists period_locks_company_id_year_idx on public.period_loc
 create index if not exists opening_shareholders_setup_id_idx on public.opening_shareholders(setup_id);
 create index if not exists ledger_entries_company_id_year_idx on public.ledger_entries(company_id, income_year);
 create index if not exists bank_transactions_company_id_year_idx on public.bank_transactions(company_id, income_year);
+create index if not exists holding_actions_company_id_year_idx on public.holding_actions(company_id, income_year);
+create index if not exists holding_actions_ledger_entry_id_idx on public.holding_actions(ledger_entry_id);
 create index if not exists filing_previews_company_id_year_idx on public.filing_previews(company_id, income_year);
 create index if not exists filing_submissions_company_id_year_idx on public.filing_submissions(company_id, income_year);
 create index if not exists filing_overrides_company_id_year_idx on public.filing_overrides(company_id, income_year);
@@ -243,6 +261,7 @@ alter table public.period_locks enable row level security;
 alter table public.opening_shareholders enable row level security;
 alter table public.ledger_entries enable row level security;
 alter table public.bank_transactions enable row level security;
+alter table public.holding_actions enable row level security;
 alter table public.filing_previews enable row level security;
 alter table public.filing_submissions enable row level security;
 alter table public.filing_overrides enable row level security;
@@ -258,6 +277,7 @@ grant select, insert on public.period_locks to authenticated;
 grant select, insert on public.opening_shareholders to authenticated;
 grant select, insert on public.ledger_entries to authenticated;
 grant select, insert, update on public.bank_transactions to authenticated;
+grant select, insert on public.holding_actions to authenticated;
 grant select, insert on public.filing_previews to authenticated;
 grant select, insert, update on public.filing_submissions to authenticated;
 grant select, insert on public.filing_overrides to authenticated;
@@ -613,6 +633,40 @@ with check (
     select 1
     from public.company_memberships m
     where m.company_id = bank_transactions.company_id
+      and m.user_id = (select auth.uid())
+      and m.role = 'owner'
+  )
+);
+
+drop policy if exists "company members can read holding actions" on public.holding_actions;
+create policy "company members can read holding actions"
+on public.holding_actions for select
+to authenticated
+using (
+  exists (
+    select 1
+    from public.company_memberships m
+    where m.company_id = holding_actions.company_id
+      and m.user_id = (select auth.uid())
+  )
+);
+
+drop policy if exists "owners can create holding actions" on public.holding_actions;
+create policy "owners can create holding actions"
+on public.holding_actions for insert
+to authenticated
+with check (
+  created_by = (select auth.uid())
+  and not exists (
+    select 1
+    from public.period_locks pl
+    where pl.company_id = holding_actions.company_id
+      and pl.income_year = holding_actions.income_year
+  )
+  and exists (
+    select 1
+    from public.company_memberships m
+    where m.company_id = holding_actions.company_id
       and m.user_id = (select auth.uid())
       and m.role = 'owner'
   )

@@ -11,12 +11,14 @@ import {
   lockCompanyYear,
   postManualJournal,
   recordAdminCost,
+  recordDividendReceived,
   signIn,
   signOut,
   signUp,
   uploadDocument,
 } from "./actions";
 import { buildDeadlineDashboard, deadlineStatusLabel } from "./lib/deadlines";
+import { summarizeDividendReceivedAnnualImpact } from "./lib/dividend-received";
 import {
   getCurrentUser,
   hasSupabaseEnv,
@@ -27,6 +29,7 @@ import {
   listFilingOverrides,
   listFilingReviewComments,
   listFilingSubmissions,
+  listHoldingActions,
   listLedgerEntries,
   listOpeningSetups,
   listPeriodLocks,
@@ -62,6 +65,7 @@ export default async function Home({ searchParams }: HomeProps) {
   const { overrides } = user ? await listFilingOverrides(companies.map((company) => company.id)) : { overrides: [] };
   const { comments } = user ? await listFilingReviewComments(companies.map((company) => company.id)) : { comments: [] };
   const { transactions } = user ? await listBankTransactions(companies.map((company) => company.id)) : { transactions: [] };
+  const { actions } = user ? await listHoldingActions(companies.map((company) => company.id)) : { actions: [] };
   const { entries } = user ? await listLedgerEntries(companies.map((company) => company.id)) : { entries: [] };
   const { locks } = user ? await listPeriodLocks(companies.map((company) => company.id)) : { locks: [] };
   const primaryCompanyId = companies[0]?.id;
@@ -69,6 +73,13 @@ export default async function Home({ searchParams }: HomeProps) {
     (transaction) => !transaction.matched_entry_id && !transaction.matched_action_id && !transaction.accepted_warning,
   );
   const adminCostEntries = entries.filter((entry) => entry.entry_type === "admin_cost");
+  const dividendReceivedActions = actions.filter((action) => action.action_type === "dividend_received");
+  const dividendAnnualImpact = summarizeDividendReceivedAnnualImpact(
+    dividendReceivedActions.map((action) => ({
+      action_type: action.action_type,
+      payload: action.payload as { gross_amount?: number; taxable_add_back?: number },
+    })),
+  );
   const manualJournalEntries = entries.filter((entry) => entry.entry_type === "manual_journal");
   const manualJournalWarnings = manualJournalEntries.flatMap((entry) => entry.risk_flags ?? []);
   const incomeYears = Array.from(
@@ -78,6 +89,7 @@ export default async function Home({ searchParams }: HomeProps) {
       ...overrides.map((override) => override.income_year),
       ...submissions.map((submission) => submission.income_year),
       ...transactions.map((transaction) => transaction.income_year),
+      ...actions.map((action) => action.income_year),
       ...locks.map((lock) => lock.income_year),
     ]),
   ).sort((a, b) => b - a);
@@ -694,6 +706,99 @@ export default async function Home({ searchParams }: HomeProps) {
                       {adminCostEntries.length} postert
                     </strong>
                     <p>Posterte administrasjonskostnader påvirker årsavslutning og arkivgrunnlag.</p>
+                  </div>
+                </div>
+              </section>
+
+              <section className="band">
+                <div className="sectionHeader">
+                  <p className="eyebrow">Mottatt utbytte</p>
+                  <h2>Poster kvalifiserende utbytte fra porteføljeselskap.</h2>
+                </div>
+                <form className="dataPanel formPanel widePanel" action={recordDividendReceived}>
+                  <input name="companyId" type="hidden" value={primaryCompanyId} />
+                  <label>
+                    Inntektsår
+                    <input name="incomeYear" inputMode="numeric" defaultValue="2025" required />
+                  </label>
+                  <label>
+                    Utbetalende selskap
+                    <input name="payingCompanyName" defaultValue="Portfolio AS" required />
+                  </label>
+                  <label>
+                    Investering-ID
+                    <input name="linkedInvestmentId" defaultValue="portfolio-as" required />
+                  </label>
+                  <label>
+                    Vedtaksdato
+                    <input name="declaredDate" defaultValue="2025-04-01" required />
+                  </label>
+                  <label>
+                    Betalt dato
+                    <input name="paidDate" defaultValue="2025-04-15" required />
+                  </label>
+                  <label>
+                    Brutto beløp
+                    <input name="grossAmount" inputMode="decimal" defaultValue="1000" required />
+                  </label>
+                  <label>
+                    Skattebehandling
+                    <select name="taxTreatment" defaultValue="fritaksmetoden">
+                      <option value="fritaksmetoden">Fritaksmetoden</option>
+                      <option value="outside_fritaksmetoden">Utenfor fritaksmetoden</option>
+                      <option value="needs_accountant">Må vurderes</option>
+                    </select>
+                  </label>
+                  <label>
+                    Banktransaksjon
+                    <select name="bankTransactionId" defaultValue="">
+                      <option value="">Ingen bankmatch</option>
+                      {unmatchedTransactions
+                        .filter((transaction) => Number(transaction.amount) > 0)
+                        .map((transaction) => (
+                          <option key={transaction.id} value={transaction.id}>
+                            {transaction.transaction_date} {transaction.text} {Number(transaction.amount).toFixed(2)} kr
+                          </option>
+                        ))}
+                    </select>
+                  </label>
+                  <label>
+                    Bilag
+                    <select name="documentId" defaultValue="">
+                      <option value="">Ingen bilagskobling</option>
+                      {documents.map((document) => (
+                        <option key={document.id} value={document.id}>
+                          {document.name}
+                        </option>
+                      ))}
+                    </select>
+                  </label>
+                  <label>
+                    Dokumentstatus
+                    <select name="documentStatus" defaultValue="attached">
+                      <option value="attached">Vedlagt</option>
+                      <option value="missing_accepted_warning">Mangler, akseptert varsel</option>
+                      <option value="not_required">Ikke påkrevd</option>
+                    </select>
+                  </label>
+                  <button className="secondaryButton" type="submit">
+                    Poster mottatt utbytte
+                  </button>
+                </form>
+                <div className="readinessGrid">
+                  <div className="readinessItem">
+                    <span>Utbytteinntekt</span>
+                    <strong data-status={dividendReceivedActions.length ? "ready" : "draft"}>
+                      {dividendAnnualImpact.dividendIncome.toFixed(2)} kr
+                    </strong>
+                    <p>{dividendReceivedActions.length} mottatte utbytter postert.</p>
+                  </div>
+                  <div className="readinessItem">
+                    <span>Fritaksmetoden</span>
+                    <strong data-status={dividendAnnualImpact.fritaksmetodenAddBack ? "warning" : "draft"}>
+                      {dividendAnnualImpact.fritaksmetodenAddBack.toFixed(2)} kr
+                    </strong>
+                    <p>3 prosent inntektsføring for skattemelding/readiness.</p>
                   </div>
                 </div>
               </section>
