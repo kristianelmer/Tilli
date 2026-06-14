@@ -255,6 +255,38 @@ h2 {
   margin: 10px 0 0;
 }
 
+.formPanel {
+  display: grid;
+  gap: 14px;
+}
+
+.formPanel label {
+  color: var(--muted);
+  display: grid;
+  font-size: 14px;
+  font-weight: 700;
+  gap: 6px;
+}
+
+.formPanel input {
+  background: #fff;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  color: var(--ink);
+  font: inherit;
+  min-height: 42px;
+  padding: 0 12px;
+}
+
+.widePanel {
+  max-width: 720px;
+}
+
+.errorText {
+  color: #b42318;
+  font-weight: 800;
+}
+
 .dataPanel.blocked {
   border-color: #e0b3ae;
 }

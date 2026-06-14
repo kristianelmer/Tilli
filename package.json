@@ -7,10 +7,14 @@
     "build": "next build",
     "start": "next start",
     "test:web": "node --test tests/web_workspace.test.mjs",
+    "test:supabase": "node --test tests/supabase_workspace.test.mjs",
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {
+    "@supabase/ssr": "^0.12.0",
+    "@supabase/supabase-js": "^2.108.1",
     "next": "16.2.9",
+    "pg": "^8.21.0",
     "react": "19.2.7",
     "react-dom": "19.2.7"
   },

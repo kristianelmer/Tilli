@@ -1,49 +1,29 @@
-import { createCompanyWorkspace, demoWorkspace, readinessSummary, statusLabel } from "./lib/workspace.mjs";
+import { createWorkspace, signIn, signOut, signUp } from "./actions";
+import { getCurrentUser, hasSupabaseEnv, listCompanyWorkspaces } from "./lib/supabase/server";
 
-type Filing = {
-  name: string;
-  status: string;
-  issues: string[];
+type HomeProps = {
+  searchParams?: Promise<{ error?: string }>;
 };
 
-type DocumentRow = {
-  id: string;
-  name: string;
-  linkedTo: string;
-  status: string;
-};
-
-type ReviewComment = {
-  id: string;
-  target: string;
-  body: string;
-  severity: string;
-};
-
-type WorkspaceView = {
-  company: {
-    orgNumber: string;
-    companyName: string;
-    incomeYear: number;
+function supportBoundary(entityType: string) {
+  if (entityType !== "AS") {
+    return {
+      status: "blocked",
+      label: "Blokkert",
+      message: "Talli støtter kun AS i første versjon.",
+    };
+  }
+  return {
+    status: "ready",
+    label: "Klar",
+    message: "Selskapet passer enkel holding AS-løypen.",
   };
-  supportBoundary: {
-    message: string;
-  };
-  filings: Filing[];
-  workflowSteps: string[];
-  documents: DocumentRow[];
-  reviewComments: ReviewComment[];
-};
+}
 
-const unsupportedCompany = createCompanyWorkspace({
-  orgNumber: "123456789",
-  companyName: "Demo ENK",
-  entityType: "ENK",
-});
-
-export default function Home() {
-  const workspace = demoWorkspace as WorkspaceView;
-  const summary = readinessSummary(demoWorkspace);
+export default async function Home({ searchParams }: HomeProps) {
+  const params = await searchParams;
+  const user = await getCurrentUser();
+  const { companies, error } = user ? await listCompanyWorkspaces() : { companies: [], error: null };
 
   return (
     <main className="shell">
@@ -53,134 +33,161 @@ export default function Home() {
           <span>Talli</span>
         </div>
         <div className="navLinks">
-          <a href="#oppsett">Oppsett</a>
-          <a href="#filingstatus">Filingstatus</a>
-          <a href="#dokumenter">Dokumenter</a>
-          <a href="#gjennomgang">Gjennomgang</a>
+          <a href="#arbeidsflate">Arbeidsflate</a>
+          <a href="#opprett">Opprett</a>
+          <a href="#sikkerhet">Sikkerhet</a>
         </div>
       </nav>
 
-      <section className="workspace">
+      <section className="workspace" id="arbeidsflate">
         <div className="intro">
-          <p className="eyebrow">Eierstyrt filing</p>
-          <h1>{workspace.company.companyName}</h1>
+          <p className="eyebrow">Supabase arbeidsflate</p>
+          <h1>Holding workspace</h1>
           <p className="lede">
-            Årsloop for enkel holding AS: selskapsoppsett, holdinghandlinger, dokumenter,
-            filingstatus og filingforhåndsvisning.
+            Første ekte SaaS-snitt: innlogging, selskap, medlemskap, RLS og audit trail i
+            Supabase. Demo-data brukes ikke for denne arbeidsflaten.
           </p>
-          <div className="actions">
-            <a className="primaryButton" href="#filingstatus">
-              Se filing-status
-            </a>
-            <a className="secondaryButton" href="#oppsett">
-              Sjekk supportgrense
-            </a>
-          </div>
+          {params?.error ? <p className="errorText">{params.error}</p> : null}
+          {!hasSupabaseEnv() ? (
+            <p className="errorText">Supabase-miljøvariabler mangler.</p>
+          ) : user ? (
+            <form action={signOut}>
+              <button className="secondaryButton" type="submit">
+                Logg ut
+              </button>
+            </form>
+          ) : null}
         </div>
 
-        <aside className="statusPanel" aria-label="Filing-status">
+        <aside className="statusPanel" aria-label="Innlogging">
           <div className="panelHeader">
-            <span>{workspace.company.orgNumber}</span>
-            <strong>{workspace.company.incomeYear}</strong>
+            <span>Status</span>
+            <strong>{user ? "Innlogget" : "Ikke innlogget"}</strong>
           </div>
           <div className="metricGrid">
             <div>
-              <span>Klar</span>
-              <strong>{summary.ready}</strong>
+              <span>Selskaper</span>
+              <strong>{companies.length}</strong>
             </div>
             <div>
-              <span>Advarsler</span>
-              <strong>{summary.warnings}</strong>
+              <span>DB</span>
+              <strong>{error ? "Feil" : "OK"}</strong>
             </div>
             <div>
-              <span>Blokkert</span>
-              <strong>{summary.blocked}</strong>
+              <span>RLS</span>
+              <strong>På</strong>
             </div>
           </div>
         </aside>
       </section>
 
-      <section id="oppsett" className="band">
-        <div className="sectionHeader">
-          <p className="eyebrow">Selskapsoppsett</p>
-          <h2>AS går videre. Andre selskapsformer stoppes.</h2>
-        </div>
-        <div className="setupGrid">
-          <div className="dataPanel">
-            <span className="panelLabel">Støttet selskap</span>
-            <strong>{workspace.company.companyName}</strong>
-            <p>{workspace.supportBoundary.message}</p>
+      {!user ? (
+        <section className="band" id="opprett">
+          <div className="sectionHeader">
+            <p className="eyebrow">Innlogging</p>
+            <h2>Supabase Auth kreves før arbeidsflate.</h2>
           </div>
-          <div className="dataPanel blocked">
-            <span className="panelLabel">Blokkert eksempel</span>
-            <strong>{unsupportedCompany.company.companyName}</strong>
-            <p>{unsupportedCompany.supportBoundary.message}</p>
+          <div className="setupGrid">
+            <form className="dataPanel formPanel" action={signIn}>
+              <span className="panelLabel">Logg inn</span>
+              <label>
+                E-post
+                <input name="email" type="email" required />
+              </label>
+              <label>
+                Passord
+                <input name="password" type="password" minLength={6} required />
+              </label>
+              <button className="primaryButton" type="submit">
+                Logg inn
+              </button>
+            </form>
+            <form className="dataPanel formPanel" action={signUp}>
+              <span className="panelLabel">Ny bruker</span>
+              <label>
+                E-post
+                <input name="email" type="email" required />
+              </label>
+              <label>
+                Passord
+                <input name="password" type="password" minLength={6} required />
+              </label>
+              <button className="secondaryButton" type="submit">
+                Opprett bruker
+              </button>
+            </form>
           </div>
-        </div>
-      </section>
-
-      <section id="filingstatus" className="band mutedBand">
-        <div className="sectionHeader">
-          <p className="eyebrow">Filingstatus</p>
-          <h2>Separate gates, delt årsdata.</h2>
-        </div>
-        <div className="readinessGrid">
-          {workspace.filings.map((filing) => (
-            <div className="readinessItem" key={filing.name}>
-              <span>{filing.name}</span>
-              <strong data-status={filing.status}>{statusLabel(filing.status)}</strong>
-              {filing.issues.map((issue) => (
-                <p key={issue}>{issue}</p>
-              ))}
+        </section>
+      ) : (
+        <>
+          <section className="band" id="opprett">
+            <div className="sectionHeader">
+              <p className="eyebrow">Selskapsarbeidsflate</p>
+              <h2>Opprett AS-workspace i Supabase.</h2>
             </div>
-          ))}
-        </div>
-      </section>
+            <form className="dataPanel formPanel widePanel" action={createWorkspace}>
+              <label>
+                Organisasjonsnummer
+                <input name="orgNumber" inputMode="numeric" pattern="[0-9]{9}" required />
+              </label>
+              <label>
+                Selskapsnavn
+                <input name="name" required />
+              </label>
+              <label>
+                Selskapsform
+                <input name="entityType" defaultValue="AS" required />
+              </label>
+              <button className="primaryButton" type="submit">
+                Opprett arbeidsflate
+              </button>
+            </form>
+          </section>
 
-      <section className="split">
+          <section className="band mutedBand">
+            <div className="sectionHeader">
+              <p className="eyebrow">Persistente selskaper</p>
+              <h2>Arbeidsflater leses fra Supabase.</h2>
+            </div>
+            <div className="readinessGrid">
+              {companies.map((company) => {
+                const boundary = supportBoundary(company.entity_type);
+                return (
+                  <div className="readinessItem" key={company.id}>
+                    <span>{company.org_number}</span>
+                    <strong data-status={boundary.status}>{company.name}</strong>
+                    <p>{boundary.message}</p>
+                    <p>Kilde: {company.source}</p>
+                  </div>
+                );
+              })}
+              {companies.length === 0 ? (
+                <div className="readinessItem">
+                  <span>Ingen selskap</span>
+                  <strong data-status="draft">Utkast</strong>
+                  <p>Opprett første arbeidsflate for å teste DB, RLS og audit trail.</p>
+                </div>
+              ) : null}
+            </div>
+          </section>
+        </>
+      )}
+
+      <section id="sikkerhet" className="split">
         <div>
-          <p className="eyebrow">Eierløype</p>
-          <h2>Ingen VAT, payroll eller faktura i første flate.</h2>
+          <p className="eyebrow">Prototype-grense</p>
+          <h2>JSON/demo state er ikke produktstien.</h2>
           <p>
-            Webskallet holder seg til domenemotoren: enkel holding AS, strukturert årsdata,
-            dokumentstatus og gjennomgang før eier sender inn.
+            Denne siden bruker Supabase Auth, RLS-beskyttede tabeller og persistente
+            medlemskap for selskap. Neste slice bygger Brønnøysund-oppslag på samme sti.
           </p>
         </div>
         <ol className="actionList">
-          {workspace.workflowSteps.map((step) => (
-            <li key={step}>{step}</li>
-          ))}
+          <li>Supabase Auth-session</li>
+          <li>Company membership med owner-rolle</li>
+          <li>RLS-basert tenant-isolasjon</li>
+          <li>Audit event for opprettet arbeidsflate</li>
         </ol>
-      </section>
-
-      <section id="dokumenter" className="band">
-        <div className="sectionHeader">
-          <p className="eyebrow">Dokumenter</p>
-          <h2>Dokumentstatus følger filing readiness og arkiv.</h2>
-        </div>
-        <div className="table">
-          {workspace.documents.map((document) => (
-            <div className="tableRow" key={document.id}>
-              <span>{document.name}</span>
-              <span>{document.linkedTo}</span>
-              <strong data-status="warning">{statusLabel(document.status)}</strong>
-            </div>
-          ))}
-        </div>
-      </section>
-
-      <section id="gjennomgang" className="archive">
-        <p className="eyebrow">Regnskapsførergjennomgang</p>
-        <h2>Kommentarer er rådgivende. Hard systemblokk stopper fortsatt filing.</h2>
-        <div className="reviewList">
-          {workspace.reviewComments.map((comment) => (
-            <div className="reviewItem" key={comment.id}>
-              <span>{comment.target}</span>
-              <p>{comment.body}</p>
-              <strong>{statusLabel(comment.severity)}</strong>
-            </div>
-          ))}
-        </div>
       </section>
     </main>
   );
