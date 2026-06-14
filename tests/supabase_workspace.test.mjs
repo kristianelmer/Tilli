@@ -9,6 +9,7 @@ import pg from "pg";
 
 import { COMPANY_DOCUMENTS_BUCKET, documentStorageKey } from "../app/lib/documents.ts";
 import { openingBalanceLedgerLines } from "../app/lib/opening-balance.ts";
+import { buildNoActivityRf1086Case, renderRf1086PreviewWithPython } from "../app/lib/rf1086.ts";
 
 const requiredEnv = ["SUPABASE_URL", "SUPABASE_ANON_KEY", "SUPABASE_SERVICE_ROLE_KEY"];
 
@@ -147,6 +148,9 @@ test(
         org_number: orgNumber,
         name: "Talli Test Holding AS",
         entity_type: "AS",
+        address: "Storgata 1",
+        postal_code: "0155",
+        city: "OSLO",
         status_text: "aktiv",
         source: "test",
         created_by: ownerUser.id,
@@ -234,7 +238,7 @@ test(
         nominal_value: openingInput.nominalValue,
         created_by: ownerUser.id,
       })
-      .select("id, share_count")
+      .select("id, company_id, income_year, bank_balance, share_capital, share_count, nominal_value, locked_at, created_by")
       .single();
     assert.ifError(setupError);
     assert.equal(setup.share_count, 100);
@@ -284,6 +288,51 @@ test(
       .eq("id", setup.id);
     assert.ifError(outsiderSetupError);
     assert.deepEqual(outsiderSetups, []);
+
+    const { data: persistedCompany, error: persistedCompanyError } = await owner
+      .from("companies")
+      .select("id, org_number, name, entity_type, address, postal_code, city, status_text, source, created_by, identity_confirmed_at, identity_locked_at, created_at")
+      .eq("id", companyId)
+      .single();
+    assert.ifError(persistedCompanyError);
+    const { data: persistedShareholders, error: persistedShareholdersError } = await owner
+      .from("opening_shareholders")
+      .select("id, setup_id, company_id, name, shareholder_kind, national_id, org_number, share_count")
+      .eq("setup_id", setup.id);
+    assert.ifError(persistedShareholdersError);
+    const rendered = renderRf1086PreviewWithPython(
+      buildNoActivityRf1086Case(persistedCompany, setup, persistedShareholders),
+    );
+    assert.equal(rendered.status, "ready");
+    assert.match(rendered.preview, /Talli Test Holding AS/);
+
+    const { data: filingPreview, error: filingPreviewError } = await owner
+      .from("filing_previews")
+      .insert({
+        company_id: companyId,
+        setup_id: setup.id,
+        income_year: 2025,
+        filing: rendered.filing,
+        status: rendered.status,
+        issues: rendered.issues,
+        preview: rendered.preview,
+        hovedskjema_xml: rendered.hovedskjemaXml,
+        underskjema_xml: rendered.underskjemaXml,
+        source: "python_rf1086_engine",
+        created_by: ownerUser.id,
+      })
+      .select("id, status, source")
+      .single();
+    assert.ifError(filingPreviewError);
+    assert.equal(filingPreview.status, "ready");
+    assert.equal(filingPreview.source, "python_rf1086_engine");
+
+    const { data: outsiderPreviews, error: outsiderPreviewError } = await outsider
+      .from("filing_previews")
+      .select("id")
+      .eq("id", filingPreview.id);
+    assert.ifError(outsiderPreviewError);
+    assert.deepEqual(outsiderPreviews, []);
 
     const documentId = randomUUID();
     const storageKey = documentStorageKey(companyId, 2025, documentId, "bank.pdf");

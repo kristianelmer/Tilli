@@ -61,6 +61,19 @@ export type OpeningShareholderRow = {
   share_count: number;
 };
 
+export type FilingPreviewRow = {
+  id: string;
+  company_id: string;
+  setup_id: string | null;
+  income_year: number;
+  filing: string;
+  status: "ready" | "blocked" | "warning";
+  issues: { level: string; code: string; message: string }[];
+  preview: string;
+  source: string;
+  created_at: string;
+};
+
 export function hasSupabaseEnv() {
   return Boolean(process.env.SUPABASE_URL && process.env.SUPABASE_ANON_KEY);
 }
@@ -149,5 +162,22 @@ export async function listOpeningSetups(companyIds: string[]) {
     setups: (setups ?? []) as OpeningBalanceSetupRow[],
     shareholders: (shareholders ?? []) as OpeningShareholderRow[],
     error: error?.message ?? shareholderError?.message ?? null,
+  };
+}
+
+export async function listFilingPreviews(companyIds: string[]) {
+  if (!hasSupabaseEnv() || companyIds.length === 0) {
+    return { previews: [] as FilingPreviewRow[], error: null };
+  }
+  const supabase = await createSupabaseServerClient();
+  const { data, error } = await supabase
+    .from("filing_previews")
+    .select("id, company_id, setup_id, income_year, filing, status, issues, preview, source, created_at")
+    .in("company_id", companyIds)
+    .order("created_at", { ascending: false });
+
+  return {
+    previews: (data ?? []) as FilingPreviewRow[],
+    error: error?.message ?? null,
   };
 }

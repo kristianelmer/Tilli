@@ -255,6 +255,21 @@ h2 {
   margin: 10px 0 0;
 }
 
+.readinessItem pre {
+  background: #f7f5f0;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  color: var(--ink);
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+  font-size: 12px;
+  line-height: 1.5;
+  margin: 14px 0 0;
+  max-height: 260px;
+  overflow: auto;
+  padding: 12px;
+  white-space: pre-wrap;
+}
+
 .formPanel {
   display: grid;
   gap: 14px;

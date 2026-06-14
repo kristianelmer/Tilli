@@ -11,7 +11,7 @@ from pydantic import ValidationError
 
 from holding_core.models import FilingCase
 from holding_core.readiness import assess_rf1086_readiness, format_readiness_report
-from holding_core.rf1086 import filing_preview, write_rf1086
+from holding_core.rf1086 import filing_preview, generate_rf1086, write_rf1086
 from holding_core.validation import run_annual_compliance_validation, run_rf1086_validation
 
 
@@ -51,6 +51,12 @@ def main(argv: list[str] | None = None) -> int:
     validate_annual_public.add_argument("--case", action="append", required=True, help="Path to annual validation fixture")
     validate_annual_public.add_argument("--json", action="store_true", help="Print machine-readable validation report")
 
+    render_rf1086 = subparsers.add_parser(
+        "render-rf1086-preview",
+        help="Render RF-1086 readiness, preview, and XML from JSON case on stdin",
+    )
+    render_rf1086.add_argument("--stdin-json", action="store_true", required=True)
+
     args = parser.parse_args(argv)
     if args.command == "simulate-aksjonaerregister":
         return _simulate(args.case, args.out, args.preview)
@@ -62,6 +68,8 @@ def main(argv: list[str] | None = None) -> int:
         return _validate_public_data(args.case, args.json)
     if args.command == "validate-annual-public-data":
         return _validate_annual_public_data(args.case, args.json)
+    if args.command == "render-rf1086-preview":
+        return _render_rf1086_preview()
     return 2
 
 
@@ -163,6 +171,28 @@ def _validate_annual_public_data(case_paths: list[str], as_json: bool) -> int:
             for issue in case.issues + case.mismatches:
                 print(f"  - {issue}")
     return 1 if any(case.outcome in {"blocked", "unsupported", "mismatch"} for case in report.cases) else 0
+
+
+def _render_rf1086_preview() -> int:
+    try:
+        case = FilingCase.model_validate_json(sys.stdin.read())
+    except (ValueError, ValidationError) as error:
+        print(json.dumps({"status": "blocked", "issues": [{"code": "invalid_case", "message": str(error)}]}))
+        return 1
+
+    readiness = assess_rf1086_readiness(case)
+    payload: dict[str, object] = {
+        "filing": readiness.filing,
+        "status": readiness.status,
+        "issues": [issue.model_dump() for issue in readiness.issues],
+        "preview": filing_preview(case),
+    }
+    if readiness.is_ready:
+        documents = generate_rf1086(case)
+        payload["hovedskjemaXml"] = documents.hovedskjema_xml
+        payload["underskjemaXml"] = documents.underskjema_xml
+    print(json.dumps(payload, ensure_ascii=False))
+    return 0 if readiness.is_ready else 1
 
 
 def _load_case(case_path: str) -> FilingCase | None:

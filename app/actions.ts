@@ -9,6 +9,7 @@ import {
   openingBalanceLedgerLines,
   validateOpeningBalanceInput,
 } from "./lib/opening-balance";
+import { buildNoActivityRf1086Case, renderRf1086PreviewWithPython } from "./lib/rf1086";
 import { createSupabaseServerClient, hasSupabaseEnv } from "./lib/supabase/server";
 
 function formString(formData: FormData, key: string) {
@@ -267,6 +268,81 @@ export async function createOpeningBalanceSetup(formData: FormData) {
     category: "ledger",
     action: "opening_balance_locked",
     message: `Åpningsbalanse låst for ${incomeYear}.`,
+  });
+
+  revalidatePath("/");
+  redirect("/");
+}
+
+export async function generateRf1086Preview(formData: FormData) {
+  if (!hasSupabaseEnv()) {
+    redirect("/?error=Supabase%20env%20mangler");
+  }
+  const supabase = await createSupabaseServerClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+  if (!user) {
+    redirect("/?error=Innlogging%20kreves");
+  }
+
+  const setupId = formString(formData, "setupId");
+  const { data: setup, error: setupError } = await supabase
+    .from("opening_balance_setups")
+    .select("id, company_id, income_year, bank_balance, share_capital, share_count, nominal_value, locked_at, created_by")
+    .eq("id", setupId)
+    .single();
+  if (setupError || !setup) {
+    redirect(`/?error=${encodeURIComponent(setupError?.message ?? "Fant ikke åpningsbalanse")}`);
+  }
+
+  const { data: company, error: companyError } = await supabase
+    .from("companies")
+    .select("id, org_number, name, entity_type, address, postal_code, city, status_text, source, created_by, identity_confirmed_at, identity_locked_at, created_at")
+    .eq("id", setup.company_id)
+    .single();
+  if (companyError || !company) {
+    redirect(`/?error=${encodeURIComponent(companyError?.message ?? "Fant ikke selskap")}`);
+  }
+
+  const { data: shareholders, error: shareholdersError } = await supabase
+    .from("opening_shareholders")
+    .select("id, setup_id, company_id, name, shareholder_kind, national_id, org_number, share_count")
+    .eq("setup_id", setupId);
+  if (shareholdersError || !shareholders) {
+    redirect(`/?error=${encodeURIComponent(shareholdersError?.message ?? "Fant ikke aksjonærer")}`);
+  }
+
+  let rendered;
+  try {
+    rendered = renderRf1086PreviewWithPython(buildNoActivityRf1086Case(company, setup, shareholders));
+  } catch (error) {
+    redirect(`/?error=${encodeURIComponent(error instanceof Error ? error.message : "RF-1086-generering feilet")}`);
+  }
+
+  const { error: insertError } = await supabase.from("filing_previews").insert({
+    company_id: setup.company_id,
+    setup_id: setup.id,
+    income_year: setup.income_year,
+    filing: rendered.filing,
+    status: rendered.status,
+    issues: rendered.issues,
+    preview: rendered.preview,
+    hovedskjema_xml: rendered.hovedskjemaXml ?? null,
+    underskjema_xml: rendered.underskjemaXml ?? {},
+    source: "python_rf1086_engine",
+    created_by: user.id,
+  });
+  if (insertError) {
+    redirect(`/?error=${encodeURIComponent(insertError.message)}`);
+  }
+
+  await supabase.from("audit_events").insert({
+    company_id: setup.company_id,
+    actor_id: user.id,
+    category: "filing",
+    action: "rf1086_preview_generated",
+    message: `RF-1086 forhåndsvisning generert for ${setup.income_year}.`,
   });
 
   revalidatePath("/");

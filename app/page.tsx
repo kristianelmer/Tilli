@@ -1,9 +1,18 @@
-import { createOpeningBalanceSetup, createWorkspace, signIn, signOut, signUp, uploadDocument } from "./actions";
+import {
+  createOpeningBalanceSetup,
+  createWorkspace,
+  generateRf1086Preview,
+  signIn,
+  signOut,
+  signUp,
+  uploadDocument,
+} from "./actions";
 import {
   getCurrentUser,
   hasSupabaseEnv,
   listCompanyWorkspaces,
   listDocumentsForCompanies,
+  listFilingPreviews,
   listOpeningSetups,
 } from "./lib/supabase/server";
 
@@ -32,6 +41,7 @@ export default async function Home({ searchParams }: HomeProps) {
   const { companies, error } = user ? await listCompanyWorkspaces() : { companies: [], error: null };
   const { documents } = user ? await listDocumentsForCompanies(companies.map((company) => company.id)) : { documents: [] };
   const { setups, shareholders } = user ? await listOpeningSetups(companies.map((company) => company.id)) : { setups: [], shareholders: [] };
+  const { previews } = user ? await listFilingPreviews(companies.map((company) => company.id)) : { previews: [] };
 
   return (
     <main className="shell">
@@ -249,8 +259,41 @@ export default async function Home({ searchParams }: HomeProps) {
                           .map((shareholder) => `${shareholder.name} (${shareholder.share_count})`)
                           .join(", ")}
                       </p>
+                      <form action={generateRf1086Preview}>
+                        <input name="setupId" type="hidden" value={setup.id} />
+                        <button className="secondaryButton" type="submit">
+                          Generer RF-1086
+                        </button>
+                      </form>
                     </div>
                   ))}
+                </div>
+              </section>
+
+              <section className="band mutedBand">
+                <div className="sectionHeader">
+                  <p className="eyebrow">RF-1086</p>
+                  <h2>Forhåndsvisning fra Python-motoren.</h2>
+                </div>
+                <div className="readinessGrid">
+                  {previews.map((preview) => (
+                    <div className="readinessItem" key={preview.id}>
+                      <span>{preview.income_year}</span>
+                      <strong data-status={preview.status}>{preview.filing}</strong>
+                      <p>Kilde: {preview.source}</p>
+                      {preview.issues.map((issue) => (
+                        <p key={issue.code}>{issue.message}</p>
+                      ))}
+                      <pre>{preview.preview}</pre>
+                    </div>
+                  ))}
+                  {previews.length === 0 ? (
+                    <div className="readinessItem">
+                      <span>RF-1086</span>
+                      <strong data-status="draft">Ikke generert</strong>
+                      <p>Generer fra låst åpningsbalanse for å se filingstatus.</p>
+                    </div>
+                  ) : null}
                 </div>
               </section>
 
