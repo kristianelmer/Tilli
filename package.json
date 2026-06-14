@@ -6,6 +6,7 @@
     "dev": "next dev",
     "build": "next build",
     "start": "next start",
+    "test:archive": "node --experimental-strip-types --test tests/archive_export.test.mjs",
     "test:brreg": "node --experimental-strip-types --test tests/brreg.test.mjs",
     "test:documents": "node --experimental-strip-types --test tests/documents.test.mjs",
     "test:opening": "node --experimental-strip-types --test tests/opening_balance.test.mjs",

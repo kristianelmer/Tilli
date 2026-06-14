@@ -7,6 +7,7 @@ import test from "node:test";
 import { createClient } from "@supabase/supabase-js";
 import pg from "pg";
 
+import { buildPersistedCompanyArchive } from "../app/lib/archive.ts";
 import { COMPANY_DOCUMENTS_BUCKET, documentStorageKey } from "../app/lib/documents.ts";
 import { openingBalanceLedgerLines } from "../app/lib/opening-balance.ts";
 import { buildNoActivityRf1086Case, renderRf1086PreviewWithPython } from "../app/lib/rf1086.ts";
@@ -357,7 +358,7 @@ test(
         },
         { onConflict: "preview_id" },
       )
-      .select("id, status, receipt_id, calls")
+      .select("id, preview_id, company_id, income_year, filing, mode, status, calls, receipt_id, feedback_document_ids, authority_confirmed_at, preview_confirmed_at, created_at, updated_at")
       .single();
     assert.ifError(filingSubmissionError);
     assert.equal(filingSubmission.status, "receipt_stored");
@@ -441,10 +442,40 @@ test(
 
     const { data: ownerDocuments, error: ownerDocumentError } = await owner
       .from("documents")
-      .select("id, storage_key")
+      .select("id, company_id, income_year, document_type, name, linked_to, status, retention_years, storage_key, created_by, created_at")
       .eq("id", documentId);
     assert.ifError(ownerDocumentError);
     assert.equal(ownerDocuments.length, 1);
+
+    const { data: persistedLedgerEntries, error: persistedLedgerError } = await owner
+      .from("ledger_entries")
+      .select("id, company_id, setup_id, income_year, entry_type, memo, lines, created_by, created_at")
+      .eq("company_id", companyId)
+      .eq("income_year", 2025);
+    assert.ifError(persistedLedgerError);
+    const archive = buildPersistedCompanyArchive({
+      company: persistedCompany,
+      incomeYear: 2025,
+      setups: [setup],
+      shareholders: persistedShareholders,
+      ledgerEntries: persistedLedgerEntries,
+      documents: ownerDocuments,
+      filingPreviews: [filingPreview],
+      filingSubmissions: [filingSubmission],
+    });
+    assert.equal(archive.source, "supabase_persisted_workspace");
+    assert.equal(archive.company.org_number, orgNumber);
+    assert.equal(archive.openingBalanceSetups[0].share_count, 100);
+    assert.equal(archive.documents[0].storageKey, storageKey);
+    assert.equal(archive.readinessReports[0].status, "ready");
+    assert.equal(archive.simulatedReceipts[0].receiptId, filingSubmission.receipt_id);
+
+    const { data: outsiderArchiveCompany, error: outsiderArchiveCompanyError } = await outsider
+      .from("companies")
+      .select("id")
+      .eq("id", companyId);
+    assert.ifError(outsiderArchiveCompanyError);
+    assert.deepEqual(outsiderArchiveCompany, []);
 
     const { data: signed, error: signedError } = await owner.storage
       .from(COMPANY_DOCUMENTS_BUCKET)

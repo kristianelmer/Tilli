@@ -329,6 +329,7 @@ export default async function Home({ searchParams }: HomeProps) {
                       <p>Kun simulering. Ingen live innsending er gjort.</p>
                       <p>{submission.calls.length} simulerte API-kall forberedt.</p>
                       <p>Bekreftet: {submission.preview_confirmed_at ? new Date(submission.preview_confirmed_at).toLocaleString("nb-NO") : "Nei"}</p>
+                      <a href={`/archive/${submission.company_id}/${submission.income_year}/download`}>Eksporter arkiv</a>
                     </div>
                   ))}
                   {submissions.length === 0 ? (
