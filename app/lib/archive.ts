@@ -3,6 +3,7 @@ import type {
   DocumentRow,
   FilingPreviewRow,
   FilingSubmissionRow,
+  HoldingActionRow,
   OpeningBalanceSetupRow,
   OpeningShareholderRow,
 } from "./supabase/server";
@@ -26,9 +27,15 @@ export function buildPersistedCompanyArchive(input: {
   shareholders: OpeningShareholderRow[];
   ledgerEntries: LedgerEntryRow[];
   documents: DocumentRow[];
+  holdingActions?: HoldingActionRow[];
   filingPreviews: FilingPreviewRow[];
   filingSubmissions: FilingSubmissionRow[];
 }) {
+  const taxSettlementActions = (input.holdingActions ?? []).filter((action) => action.action_type === "tax_settlement");
+  const taxSettlementLedgerIds = new Set(
+    taxSettlementActions.map((action) => action.ledger_entry_id).filter((id): id is string => Boolean(id)),
+  );
+
   const receipts = input.filingSubmissions
     .filter((submission) => submission.mode === "simulation" && submission.receipt_id)
     .map((submission) => ({
@@ -54,6 +61,24 @@ export function buildPersistedCompanyArchive(input: {
     openingBalanceSetups: input.setups,
     shareholders: input.shareholders,
     ledgerEntries: input.ledgerEntries,
+    taxSettlements: taxSettlementActions.map((action) => ({
+      id: action.id,
+      incomeYear: action.income_year,
+      actionDate: action.action_date,
+      payload: action.payload,
+      ledgerEntryId: action.ledger_entry_id,
+      bankTransactionId: action.bank_transaction_id,
+      documentId: action.document_id,
+      riskLevel: action.risk_level,
+      createdAt: action.created_at,
+      ledgerEntry: action.ledger_entry_id
+        ? input.ledgerEntries.find((entry) => entry.id === action.ledger_entry_id) ?? null
+        : null,
+      document: action.document_id
+        ? input.documents.find((document) => document.id === action.document_id) ?? null
+        : null,
+    })),
+    taxSettlementLedgerEntries: input.ledgerEntries.filter((entry) => taxSettlementLedgerIds.has(entry.id)),
     documents: input.documents.map((document) => ({
       id: document.id,
       incomeYear: document.income_year,

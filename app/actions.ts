@@ -39,6 +39,12 @@ import {
   validateShareholderLoan,
 } from "./lib/shareholder-loan";
 import { createSupabaseServerClient, hasSupabaseEnv } from "./lib/supabase/server";
+import {
+  TaxSettlementValidationError,
+  expectedBankAmountForTaxSettlement,
+  taxSettlementLedgerLines,
+  validateTaxSettlement,
+} from "./lib/tax-settlement";
 
 function formString(formData: FormData, key: string) {
   const value = formData.get(key);
@@ -1578,6 +1584,133 @@ export async function recordShareholderLoan(formData: FormData) {
     category: "ledger",
     action: "shareholder_loan_recorded",
     message: `Aksjonærlån postert for ${payload.counterparty_name} i ${incomeYear}.`,
+  });
+
+  revalidatePath("/");
+  redirect("/");
+}
+
+export async function recordTaxSettlement(formData: FormData) {
+  if (!hasSupabaseEnv()) {
+    redirect("/?error=Supabase%20env%20mangler");
+  }
+  const supabase = await createSupabaseServerClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+  if (!user) {
+    redirect("/?error=Innlogging%20kreves");
+  }
+
+  const companyId = formString(formData, "companyId");
+  const incomeYear = Number(formString(formData, "incomeYear") || "2025");
+  const bankTransactionId = formString(formData, "bankTransactionId") || null;
+  const documentId = formString(formData, "documentId") || null;
+  let payload;
+  try {
+    payload = validateTaxSettlement({
+      settlementDate: formString(formData, "settlementDate"),
+      amount: Number(formString(formData, "amount")),
+      settlementType: formString(formData, "settlementType") as "payable" | "payment" | "refund",
+      documentStatus: formString(formData, "documentStatus") as "attached" | "missing_accepted_warning" | "not_required",
+      bankTransactionId,
+      documentId,
+    });
+  } catch (error) {
+    const message =
+      error instanceof TaxSettlementValidationError
+        ? `${error.code}: ${error.message}`
+        : error instanceof Error
+          ? error.message
+          : "Ugyldig skatteoppgjør";
+    redirect(`/?error=${encodeURIComponent(message)}`);
+  }
+
+  if (bankTransactionId) {
+    const { data: transaction, error: transactionError } = await supabase
+      .from("bank_transactions")
+      .select("id, company_id, income_year, amount, matched_entry_id, matched_action_id, accepted_warning")
+      .eq("id", bankTransactionId)
+      .single();
+    if (transactionError || !transaction) {
+      redirect(`/?error=${encodeURIComponent(transactionError?.message ?? "Fant ikke banktransaksjon")}`);
+    }
+    if (transaction.company_id !== companyId || Number(transaction.income_year) !== incomeYear) {
+      redirect("/?error=Banktransaksjonen%20tilh%C3%B8rer%20ikke%20valgt%20selskap%20og%20%C3%A5r");
+    }
+    if (transaction.matched_entry_id || transaction.matched_action_id || transaction.accepted_warning) {
+      redirect("/?error=Banktransaksjonen%20er%20allerede%20avstemt");
+    }
+    const expectedAmount = expectedBankAmountForTaxSettlement(payload);
+    if (expectedAmount === null || Number(transaction.amount) !== expectedAmount) {
+      redirect("/?error=Banktransaksjonen%20m%C3%A5%20matche%20skatteoppgj%C3%B8ret");
+    }
+  }
+  if (documentId) {
+    const { data: document, error: documentError } = await supabase
+      .from("documents")
+      .select("id, company_id, income_year")
+      .eq("id", documentId)
+      .single();
+    if (documentError || !document) {
+      redirect(`/?error=${encodeURIComponent(documentError?.message ?? "Fant ikke bilag")}`);
+    }
+    if (document.company_id !== companyId || Number(document.income_year) !== incomeYear) {
+      redirect("/?error=Bilaget%20tilh%C3%B8rer%20ikke%20valgt%20selskap%20og%20%C3%A5r");
+    }
+  }
+
+  const { data: entry, error: entryError } = await supabase
+    .from("ledger_entries")
+    .insert({
+      company_id: companyId,
+      income_year: incomeYear,
+      entry_type: "tax_settlement",
+      memo: `Skatteoppgjør: ${payload.settlement_type}`,
+      lines: taxSettlementLedgerLines(payload),
+      risk_flags: [],
+      created_by: user.id,
+    })
+    .select("id")
+    .single();
+  if (entryError || !entry) {
+    redirect(`/?error=${encodeURIComponent(entryError?.message ?? "Kunne ikke postere skatteoppgjør")}`);
+  }
+
+  const actionId = crypto.randomUUID();
+  const { error: actionError } = await supabase.from("holding_actions").insert({
+    id: actionId,
+    company_id: companyId,
+    income_year: incomeYear,
+    action_type: "tax_settlement",
+    action_date: payload.settlement_date,
+    payload,
+    ledger_entry_id: entry.id,
+    bank_transaction_id: bankTransactionId,
+    document_id: documentId,
+    risk_level: "ready",
+    created_by: user.id,
+  });
+  if (actionError) {
+    redirect(`/?error=${encodeURIComponent(actionError.message)}`);
+  }
+
+  if (bankTransactionId) {
+    const { error: matchError } = await supabase
+      .from("bank_transactions")
+      .update({ matched_action_id: actionId })
+      .eq("id", bankTransactionId);
+    if (matchError) {
+      redirect(`/?error=${encodeURIComponent(matchError.message)}`);
+    }
+  }
+
+  await supabase.from("audit_events").insert({
+    company_id: companyId,
+    actor_id: user.id,
+    category: "ledger",
+    action: "tax_settlement_recorded",
+    message: `Skatteoppgjør postert for ${incomeYear}.`,
   });
 
   revalidatePath("/");

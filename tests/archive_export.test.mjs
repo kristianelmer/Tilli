@@ -58,6 +58,20 @@ test("builds company-year archive from persisted workspace rows", () => {
         created_by: "owner",
         created_at: "2026-01-01T00:00:00Z",
       },
+      {
+        id: "tax-ledger-id",
+        company_id: "company-id",
+        setup_id: null,
+        income_year: 2025,
+        entry_type: "tax_settlement",
+        memo: "Skatteoppgjør: payment",
+        lines: [
+          { account: "2500", description: "Betalt skatt", debit: 100, credit: 0 },
+          { account: "1920", description: "Bank", debit: 0, credit: 100 },
+        ],
+        created_by: "owner",
+        created_at: "2026-01-02T00:00:00Z",
+      },
     ],
     documents: [
       {
@@ -72,6 +86,43 @@ test("builds company-year archive from persisted workspace rows", () => {
         storage_key: "company-id/2025/document-id-bank.pdf",
         created_by: "owner",
         created_at: "2026-01-01T00:00:00Z",
+      },
+      {
+        id: "tax-document-id",
+        company_id: "company-id",
+        income_year: 2025,
+        document_type: "tax_settlement",
+        name: "skatt.pdf",
+        linked_to: "tax_settlement",
+        status: "attached",
+        retention_years: 5,
+        storage_key: "company-id/2025/tax-document-id-skatt.pdf",
+        created_by: "owner",
+        created_at: "2026-01-02T00:00:00Z",
+      },
+    ],
+    holdingActions: [
+      {
+        id: "tax-action-id",
+        company_id: "company-id",
+        income_year: 2025,
+        action_type: "tax_settlement",
+        action_date: "2025-12-31",
+        payload: {
+          settlement_date: "2025-12-31",
+          settlement_type: "payment",
+          amount: 100,
+          document_status: "attached",
+          bank_transaction_id: "bank-id",
+          document_id: "tax-document-id",
+        },
+        ledger_entry_id: "tax-ledger-id",
+        bank_transaction_id: "bank-id",
+        document_id: "tax-document-id",
+        risk_level: "ready",
+        blocker_code: null,
+        created_by: "owner",
+        created_at: "2026-01-02T00:00:00Z",
       },
     ],
     filingPreviews: [
@@ -118,4 +169,7 @@ test("builds company-year archive from persisted workspace rows", () => {
   assert.equal(archive.readinessReports[0].status, "ready");
   assert.equal(archive.filingPreviews[0].hovedskjemaXml, "<RF-1086 />");
   assert.equal(archive.simulatedReceipts[0].receiptId, "sim-rf1086-company-id-2025-preview");
+  assert.equal(archive.taxSettlements[0].ledgerEntryId, "tax-ledger-id");
+  assert.equal(archive.taxSettlements[0].document.id, "tax-document-id");
+  assert.equal(archive.taxSettlementLedgerEntries[0].entry_type, "tax_settlement");
 });

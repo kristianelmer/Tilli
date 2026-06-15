@@ -29,6 +29,11 @@ import { assertAdvisoryCanBeAcknowledged, assertNoHardReviewBlocks } from "../ap
 import { sharePurchaseLedgerLines, validateSharePurchase } from "../app/lib/share-purchase.ts";
 import { shareSaleLedgerLines, validateShareSale } from "../app/lib/share-sale.ts";
 import { shareholderLoanLedgerLines, validateShareholderLoan } from "../app/lib/shareholder-loan.ts";
+import {
+  estimateAnnualTax,
+  taxSettlementLedgerLines,
+  validateTaxSettlement,
+} from "../app/lib/tax-settlement.ts";
 
 const requiredEnv = ["SUPABASE_URL", "SUPABASE_ANON_KEY", "SUPABASE_SERVICE_ROLE_KEY"];
 
@@ -1397,6 +1402,112 @@ test(
     });
     assert.ok(outsiderLoanActionInsertError);
 
+    const taxEstimate = estimateAnnualTax({
+      ledgerEntries: [{ entry_type: "admin_cost", lines: adminCostEntry.lines }],
+      holdingActions: [{ action_type: "dividend_received", payload: dividendPayload }],
+    });
+    assert.equal(taxEstimate.status, "payable");
+    assert.equal(taxEstimate.estimatedTax, 17.6);
+    const taxDocumentId = randomUUID();
+    const { error: taxDocumentError } = await owner.from("documents").insert({
+      id: taxDocumentId,
+      company_id: companyId,
+      income_year: 2025,
+      document_type: "tax_settlement",
+      name: "tax-settlement.pdf",
+      linked_to: "tax_settlement",
+      status: "attached",
+      storage_key: `companies/${companyId}/2025/${taxDocumentId}/tax-settlement.pdf`,
+      created_by: ownerUser.id,
+    });
+    assert.ifError(taxDocumentError);
+    const { data: taxBankTransaction, error: taxBankTransactionError } = await owner
+      .from("bank_transactions")
+      .insert({
+        company_id: companyId,
+        income_year: 2025,
+        transaction_date: "2025-12-31",
+        text: "Tax payment",
+        amount: -17.6,
+        balance: 30932.4,
+        source_hash: `tax-bank-${randomUUID()}`,
+        created_by: ownerUser.id,
+      })
+      .select("id, amount")
+      .single();
+    assert.ifError(taxBankTransactionError);
+    const taxPayload = validateTaxSettlement({
+      settlementDate: "2025-12-31",
+      amount: taxEstimate.estimatedTax,
+      settlementType: "payment",
+      documentStatus: "attached",
+      bankTransactionId: taxBankTransaction.id,
+      documentId: taxDocumentId,
+    });
+    const taxLines = taxSettlementLedgerLines(taxPayload);
+    const { data: taxEntry, error: taxEntryError } = await owner
+      .from("ledger_entries")
+      .insert({
+        company_id: companyId,
+        income_year: 2025,
+        entry_type: "tax_settlement",
+        memo: "Skatteoppgjør: payment",
+        lines: taxLines,
+        created_by: ownerUser.id,
+      })
+      .select("id, entry_type, lines")
+      .single();
+    assert.ifError(taxEntryError);
+    assert.equal(taxEntry.entry_type, "tax_settlement");
+    assert.deepEqual(taxEntry.lines, taxLines);
+    const taxActionId = randomUUID();
+    const { data: taxAction, error: taxActionError } = await owner
+      .from("holding_actions")
+      .insert({
+        id: taxActionId,
+        company_id: companyId,
+        income_year: 2025,
+        action_type: "tax_settlement",
+        action_date: taxPayload.settlement_date,
+        payload: taxPayload,
+        ledger_entry_id: taxEntry.id,
+        bank_transaction_id: taxBankTransaction.id,
+        document_id: taxDocumentId,
+        risk_level: "ready",
+        created_by: ownerUser.id,
+      })
+      .select("id, action_type, ledger_entry_id, bank_transaction_id, document_id, payload, action_date, risk_level, blocker_code, created_by, created_at")
+      .single();
+    assert.ifError(taxActionError);
+    assert.equal(taxAction.action_type, "tax_settlement");
+    assert.equal(taxAction.ledger_entry_id, taxEntry.id);
+    assert.equal(taxAction.document_id, taxDocumentId);
+    const { error: taxBankMatchError } = await owner
+      .from("bank_transactions")
+      .update({ matched_action_id: taxAction.id })
+      .eq("id", taxBankTransaction.id);
+    assert.ifError(taxBankMatchError);
+    const { data: reloadedTaxEntry, error: reloadedTaxEntryError } = await owner
+      .from("ledger_entries")
+      .select("id, entry_type")
+      .eq("id", taxEntry.id)
+      .single();
+    assert.ifError(reloadedTaxEntryError);
+    assert.equal(reloadedTaxEntry.entry_type, "tax_settlement");
+    const { error: outsiderTaxActionInsertError } = await outsider.from("holding_actions").insert({
+      company_id: companyId,
+      income_year: 2025,
+      action_type: "tax_settlement",
+      action_date: taxPayload.settlement_date,
+      payload: taxPayload,
+      ledger_entry_id: taxEntry.id,
+      bank_transaction_id: taxBankTransaction.id,
+      document_id: taxDocumentId,
+      risk_level: "ready",
+      created_by: outsiderUser.id,
+    });
+    assert.ok(outsiderTaxActionInsertError);
+
     const manualJournal = validateManualJournal({
       warningAccepted: true,
       lines: [
@@ -1576,9 +1687,10 @@ test(
     const { data: ownerDocuments, error: ownerDocumentError } = await owner
       .from("documents")
       .select("id, company_id, income_year, document_type, name, linked_to, status, retention_years, storage_key, created_by, created_at")
-      .eq("id", documentId);
+      .eq("company_id", companyId)
+      .eq("income_year", 2025);
     assert.ifError(ownerDocumentError);
-    assert.equal(ownerDocuments.length, 1);
+    assert.ok(ownerDocuments.length >= 2);
 
     const { data: persistedLedgerEntries, error: persistedLedgerError } = await owner
       .from("ledger_entries")
@@ -1586,6 +1698,12 @@ test(
       .eq("company_id", companyId)
       .eq("income_year", 2025);
     assert.ifError(persistedLedgerError);
+    const { data: persistedHoldingActions, error: persistedHoldingActionsError } = await owner
+      .from("holding_actions")
+      .select("id, company_id, income_year, action_type, action_date, payload, ledger_entry_id, bank_transaction_id, document_id, risk_level, blocker_code, created_by, created_at")
+      .eq("company_id", companyId)
+      .eq("income_year", 2025);
+    assert.ifError(persistedHoldingActionsError);
     const archive = buildPersistedCompanyArchive({
       company: persistedCompany,
       incomeYear: 2025,
@@ -1593,15 +1711,19 @@ test(
       shareholders: persistedShareholders,
       ledgerEntries: persistedLedgerEntries,
       documents: ownerDocuments,
+      holdingActions: persistedHoldingActions,
       filingPreviews: [filingPreview],
       filingSubmissions: [filingSubmission],
     });
     assert.equal(archive.source, "supabase_persisted_workspace");
     assert.equal(archive.company.org_number, orgNumber);
     assert.equal(archive.openingBalanceSetups[0].share_count, 100);
-    assert.equal(archive.documents[0].storageKey, storageKey);
+    assert.equal(archive.documents.find((document) => document.id === documentId).storageKey, storageKey);
     assert.equal(archive.readinessReports[0].status, "ready");
     assert.equal(archive.simulatedReceipts[0].receiptId, filingSubmission.receipt_id);
+    assert.equal(archive.taxSettlements[0].ledgerEntryId, taxEntry.id);
+    assert.equal(archive.taxSettlements[0].documentId, taxDocumentId);
+    assert.equal(archive.taxSettlements[0].document.id, taxDocumentId);
 
     const { data: outsiderArchiveCompany, error: outsiderArchiveCompanyError } = await outsider
       .from("companies")

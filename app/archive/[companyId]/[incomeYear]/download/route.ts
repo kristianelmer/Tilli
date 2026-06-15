@@ -30,28 +30,34 @@ export async function GET(_request: Request, { params }: { params: Promise<Recor
     return new Response("Archive requires simulated receipt first", { status: 409 });
   }
 
-  const [{ data: setups }, { data: ledgerEntries }, { data: documents }, { data: previews }] = await Promise.all([
-    supabase
-      .from("opening_balance_setups")
-      .select("id, company_id, income_year, bank_balance, share_capital, share_count, nominal_value, locked_at, created_by")
-      .eq("company_id", companyId)
-      .eq("income_year", incomeYear),
-    supabase
-      .from("ledger_entries")
-      .select("id, company_id, setup_id, income_year, entry_type, memo, lines, created_by, created_at")
-      .eq("company_id", companyId)
-      .eq("income_year", incomeYear),
-    supabase
-      .from("documents")
-      .select("id, company_id, income_year, document_type, name, linked_to, status, retention_years, storage_key, created_by, created_at")
-      .eq("company_id", companyId)
-      .eq("income_year", incomeYear),
-    supabase
-      .from("filing_previews")
-      .select("id, company_id, setup_id, income_year, filing, status, issues, preview, hovedskjema_xml, underskjema_xml, source, created_at")
-      .eq("company_id", companyId)
-      .eq("income_year", incomeYear),
-  ]);
+  const [{ data: setups }, { data: ledgerEntries }, { data: documents }, { data: previews }, { data: holdingActions }] =
+    await Promise.all([
+      supabase
+        .from("opening_balance_setups")
+        .select("id, company_id, income_year, bank_balance, share_capital, share_count, nominal_value, locked_at, created_by")
+        .eq("company_id", companyId)
+        .eq("income_year", incomeYear),
+      supabase
+        .from("ledger_entries")
+        .select("id, company_id, setup_id, income_year, entry_type, memo, lines, created_by, created_at")
+        .eq("company_id", companyId)
+        .eq("income_year", incomeYear),
+      supabase
+        .from("documents")
+        .select("id, company_id, income_year, document_type, name, linked_to, status, retention_years, storage_key, created_by, created_at")
+        .eq("company_id", companyId)
+        .eq("income_year", incomeYear),
+      supabase
+        .from("filing_previews")
+        .select("id, company_id, setup_id, income_year, filing, status, issues, preview, hovedskjema_xml, underskjema_xml, source, created_at")
+        .eq("company_id", companyId)
+        .eq("income_year", incomeYear),
+      supabase
+        .from("holding_actions")
+        .select("id, company_id, income_year, action_type, action_date, payload, ledger_entry_id, bank_transaction_id, document_id, risk_level, blocker_code, created_by, created_at")
+        .eq("company_id", companyId)
+        .eq("income_year", incomeYear),
+    ]);
 
   const setupIds = (setups ?? []).map((setup) => setup.id);
   const { data: shareholders } = setupIds.length
@@ -68,6 +74,7 @@ export async function GET(_request: Request, { params }: { params: Promise<Recor
     shareholders: shareholders ?? [],
     ledgerEntries: ledgerEntries ?? [],
     documents: documents ?? [],
+    holdingActions: holdingActions ?? [],
     filingPreviews: previews ?? [],
     filingSubmissions: submissions ?? [],
   });

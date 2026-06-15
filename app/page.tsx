@@ -16,6 +16,7 @@ import {
   recordSharePurchase,
   recordShareSale,
   recordShareholderLoan,
+  recordTaxSettlement,
   signIn,
   signOut,
   signUp,
@@ -23,6 +24,7 @@ import {
 } from "./actions";
 import { buildDeadlineDashboard, deadlineStatusLabel } from "./lib/deadlines";
 import { summarizeDividendReceivedAnnualImpact } from "./lib/dividend-received";
+import { estimateAnnualTax } from "./lib/tax-settlement";
 import {
   getCurrentUser,
   hasSupabaseEnv,
@@ -79,6 +81,8 @@ export default async function Home({ searchParams }: HomeProps) {
     (transaction) => !transaction.matched_entry_id && !transaction.matched_action_id && !transaction.accepted_warning,
   );
   const adminCostEntries = entries.filter((entry) => entry.entry_type === "admin_cost");
+  const taxSettlementEntries = entries.filter((entry) => entry.entry_type === "tax_settlement");
+  const taxSettlementActions = actions.filter((action) => action.action_type === "tax_settlement");
   const primaryShareholders = shareholders.filter((shareholder) => shareholder.company_id === primaryCompanyId);
   const dividendReceivedActions = actions.filter((action) => action.action_type === "dividend_received");
   const dividendAnnualImpact = summarizeDividendReceivedAnnualImpact(
@@ -89,6 +93,7 @@ export default async function Home({ searchParams }: HomeProps) {
   );
   const manualJournalEntries = entries.filter((entry) => entry.entry_type === "manual_journal");
   const manualJournalWarnings = manualJournalEntries.flatMap((entry) => entry.risk_flags ?? []);
+  const taxEstimate = estimateAnnualTax({ ledgerEntries: entries, holdingActions: actions });
   const incomeYears = Array.from(
     new Set([
       ...setups.map((setup) => setup.income_year),
@@ -597,6 +602,89 @@ export default async function Home({ searchParams }: HomeProps) {
                     Poster aksjonærlån
                   </button>
                 </form>
+              </section>
+
+              <section className="band mutedBand">
+                <div className="sectionHeader">
+                  <p className="eyebrow">Skatteoppgjør</p>
+                  <h2>Beregn estimat og poster betaling eller refusjon.</h2>
+                </div>
+                <form className="dataPanel formPanel widePanel" action={recordTaxSettlement}>
+                  <input name="companyId" type="hidden" value={primaryCompanyId} />
+                  <label>
+                    Inntektsår
+                    <input name="incomeYear" inputMode="numeric" defaultValue="2025" required />
+                  </label>
+                  <label>
+                    Oppgjørsdato
+                    <input name="settlementDate" defaultValue="2025-12-31" required />
+                  </label>
+                  <label>
+                    Type
+                    <select name="settlementType" defaultValue="payable">
+                      <option value="payable">Betalbar skatt-estimat</option>
+                      <option value="payment">Skatt betalt</option>
+                      <option value="refund">Skatterefusjon mottatt</option>
+                    </select>
+                  </label>
+                  <label>
+                    Beløp
+                    <input name="amount" inputMode="decimal" defaultValue={taxEstimate.estimatedTax || 1} required />
+                  </label>
+                  <label>
+                    Banktransaksjon
+                    <select name="bankTransactionId" defaultValue="">
+                      <option value="">Ingen bankmatch</option>
+                      {unmatchedTransactions.map((transaction) => (
+                        <option key={transaction.id} value={transaction.id}>
+                          {transaction.transaction_date} {transaction.text} {Number(transaction.amount).toFixed(2)} kr
+                        </option>
+                      ))}
+                    </select>
+                  </label>
+                  <label>
+                    Bilag
+                    <select name="documentId" defaultValue="">
+                      <option value="">Ingen bilagskobling</option>
+                      {documents.map((document) => (
+                        <option key={document.id} value={document.id}>
+                          {document.name}
+                        </option>
+                      ))}
+                    </select>
+                  </label>
+                  <label>
+                    Dokumentstatus
+                    <select name="documentStatus" defaultValue="attached">
+                      <option value="attached">Vedlagt</option>
+                      <option value="missing_accepted_warning">Mangler, akseptert varsel</option>
+                      <option value="not_required">Ikke påkrevd</option>
+                    </select>
+                  </label>
+                  <button className="secondaryButton" type="submit">
+                    Poster skatteoppgjør
+                  </button>
+                </form>
+                <div className="readinessGrid">
+                  <div className="readinessItem">
+                    <span>Estimert skatt</span>
+                    <strong data-status={taxEstimate.status === "payable" ? "warning" : "ready"}>
+                      {taxEstimate.estimatedTax.toFixed(2)} kr
+                    </strong>
+                    <p>Grunnlag: {taxEstimate.taxBasis.toFixed(2)} kr.</p>
+                    <p>
+                      Kostnader {taxEstimate.adminCosts.toFixed(2)} kr + fritaksmetoden {taxEstimate.fritaksmetodenAddBack.toFixed(2)} kr.
+                    </p>
+                  </div>
+                  <div className="readinessItem">
+                    <span>Oppgjør</span>
+                    <strong data-status={taxSettlementActions.length ? "ready" : "draft"}>
+                      {taxSettlementActions.length} postert
+                    </strong>
+                    <p>{taxSettlementEntries.length} skatteoppgjørsposteringer i ledger.</p>
+                    <p>Arkivet inkluderer skatteoppgjør med bilag og ledger-lenke.</p>
+                  </div>
+                </div>
               </section>
 
               <section className="band">
