@@ -21,6 +21,7 @@
     "test:rf1086:submission": "node --experimental-strip-types --test tests/rf1086_submission_persisted.test.mjs",
     "test:share-purchase": "node --experimental-strip-types --test tests/share_purchase.test.mjs",
     "test:share-sale": "node --experimental-strip-types --test tests/share_sale.test.mjs",
+    "test:shareholder-loan": "node --experimental-strip-types --test tests/shareholder_loan.test.mjs",
     "test:web": "node --test tests/web_workspace.test.mjs",
     "test:supabase": "node --test tests/supabase_workspace.test.mjs",
     "typecheck": "tsc --noEmit"

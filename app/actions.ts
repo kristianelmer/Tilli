@@ -33,6 +33,11 @@ import { buildNoActivityRf1086Case, renderRf1086PreviewWithPython } from "./lib/
 import { assertAdvisoryCanBeAcknowledged, assertNoHardReviewBlocks } from "./lib/review";
 import { SharePurchaseValidationError, sharePurchaseLedgerLines, validateSharePurchase } from "./lib/share-purchase";
 import { ShareSaleValidationError, shareSaleLedgerLines, validateShareSale } from "./lib/share-sale";
+import {
+  ShareholderLoanValidationError,
+  shareholderLoanLedgerLines,
+  validateShareholderLoan,
+} from "./lib/shareholder-loan";
 import { createSupabaseServerClient, hasSupabaseEnv } from "./lib/supabase/server";
 
 function formString(formData: FormData, key: string) {
@@ -1439,6 +1444,140 @@ export async function recordOwnerDividend(formData: FormData) {
     category: "ledger",
     action: "dividend_to_owner_recorded",
     message: `Eierutbytte postert for ${incomeYear}.`,
+  });
+
+  revalidatePath("/");
+  redirect("/");
+}
+
+export async function recordShareholderLoan(formData: FormData) {
+  if (!hasSupabaseEnv()) {
+    redirect("/?error=Supabase%20env%20mangler");
+  }
+  const supabase = await createSupabaseServerClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+  if (!user) {
+    redirect("/?error=Innlogging%20kreves");
+  }
+
+  const companyId = formString(formData, "companyId");
+  const incomeYear = Number(formString(formData, "incomeYear") || "2025");
+  const bankTransactionId = formString(formData, "bankTransactionId") || null;
+  const documentId = formString(formData, "documentId") || null;
+  let payload;
+  try {
+    payload = validateShareholderLoan({
+      loanDate: formString(formData, "loanDate"),
+      amount: Number(formString(formData, "amount")),
+      direction: formString(formData, "direction") as
+        | "shareholder_to_company"
+        | "company_to_corporate_shareholder"
+        | "company_to_personal_shareholder",
+      counterpartyName: formString(formData, "counterpartyName"),
+      documentStatus: formString(formData, "documentStatus") as "attached" | "missing_accepted_warning" | "not_required",
+      interestModelled: formData.get("interestModelled") === "on",
+      relatedPartySecurity: formData.get("relatedPartySecurity") === "on",
+      bankTransactionId,
+      documentId,
+    });
+  } catch (error) {
+    const message =
+      error instanceof ShareholderLoanValidationError
+        ? `${error.code}: ${error.message}`
+        : error instanceof Error
+          ? error.message
+          : "Ugyldig aksjonærlån";
+    redirect(`/?error=${encodeURIComponent(message)}`);
+  }
+
+  if (bankTransactionId) {
+    const { data: transaction, error: transactionError } = await supabase
+      .from("bank_transactions")
+      .select("id, company_id, income_year, amount, matched_entry_id, matched_action_id, accepted_warning")
+      .eq("id", bankTransactionId)
+      .single();
+    if (transactionError || !transaction) {
+      redirect(`/?error=${encodeURIComponent(transactionError?.message ?? "Fant ikke banktransaksjon")}`);
+    }
+    if (transaction.company_id !== companyId || Number(transaction.income_year) !== incomeYear) {
+      redirect("/?error=Banktransaksjonen%20tilh%C3%B8rer%20ikke%20valgt%20selskap%20og%20%C3%A5r");
+    }
+    if (transaction.matched_entry_id || transaction.matched_action_id || transaction.accepted_warning) {
+      redirect("/?error=Banktransaksjonen%20er%20allerede%20avstemt");
+    }
+    const expectedAmount = payload.direction === "shareholder_to_company" ? payload.amount : -payload.amount;
+    if (Number(transaction.amount) !== expectedAmount) {
+      redirect("/?error=Banktransaksjonen%20m%C3%A5%20matche%20aksjon%C3%A6rl%C3%A5net");
+    }
+  }
+  if (documentId) {
+    const { data: document, error: documentError } = await supabase
+      .from("documents")
+      .select("id, company_id, income_year")
+      .eq("id", documentId)
+      .single();
+    if (documentError || !document) {
+      redirect(`/?error=${encodeURIComponent(documentError?.message ?? "Fant ikke bilag")}`);
+    }
+    if (document.company_id !== companyId || Number(document.income_year) !== incomeYear) {
+      redirect("/?error=Bilaget%20tilh%C3%B8rer%20ikke%20valgt%20selskap%20og%20%C3%A5r");
+    }
+  }
+
+  const lines = shareholderLoanLedgerLines(payload);
+  const { data: entry, error: entryError } = await supabase
+    .from("ledger_entries")
+    .insert({
+      company_id: companyId,
+      income_year: incomeYear,
+      entry_type: "shareholder_loan",
+      memo: `Shareholder loan: ${payload.counterparty_name}`,
+      lines,
+      risk_flags: [],
+      created_by: user.id,
+    })
+    .select("id")
+    .single();
+  if (entryError || !entry) {
+    redirect(`/?error=${encodeURIComponent(entryError?.message ?? "Kunne ikke postere aksjonærlån")}`);
+  }
+
+  const actionId = crypto.randomUUID();
+  const { error: actionError } = await supabase.from("holding_actions").insert({
+    id: actionId,
+    company_id: companyId,
+    income_year: incomeYear,
+    action_type: "shareholder_loan",
+    action_date: payload.loan_date,
+    payload,
+    ledger_entry_id: entry.id,
+    bank_transaction_id: bankTransactionId,
+    document_id: documentId,
+    risk_level: "ready",
+    created_by: user.id,
+  });
+  if (actionError) {
+    redirect(`/?error=${encodeURIComponent(actionError.message)}`);
+  }
+
+  if (bankTransactionId) {
+    const { error: matchError } = await supabase
+      .from("bank_transactions")
+      .update({ matched_action_id: actionId })
+      .eq("id", bankTransactionId);
+    if (matchError) {
+      redirect(`/?error=${encodeURIComponent(matchError.message)}`);
+    }
+  }
+
+  await supabase.from("audit_events").insert({
+    company_id: companyId,
+    actor_id: user.id,
+    category: "ledger",
+    action: "shareholder_loan_recorded",
+    message: `Aksjonærlån postert for ${payload.counterparty_name} i ${incomeYear}.`,
   });
 
   revalidatePath("/");

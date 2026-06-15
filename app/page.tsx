@@ -15,6 +15,7 @@ import {
   recordOwnerDividend,
   recordSharePurchase,
   recordShareSale,
+  recordShareholderLoan,
   signIn,
   signOut,
   signUp,
@@ -521,6 +522,81 @@ export default async function Home({ searchParams }: HomeProps) {
                     </div>
                   ) : null}
                 </div>
+              </section>
+
+              <section className="band">
+                <div className="sectionHeader">
+                  <p className="eyebrow">Aksjonærlån</p>
+                  <h2>Registrer støttet aksjonær- eller konsernlån.</h2>
+                </div>
+                <form className="dataPanel formPanel widePanel" action={recordShareholderLoan}>
+                  <input name="companyId" type="hidden" value={primaryCompanyId} />
+                  <label>
+                    Inntektsår
+                    <input name="incomeYear" inputMode="numeric" defaultValue="2025" required />
+                  </label>
+                  <label>
+                    Lånedato
+                    <input name="loanDate" defaultValue="2025-07-01" required />
+                  </label>
+                  <label>
+                    Beløp
+                    <input name="amount" inputMode="decimal" defaultValue="20000" required />
+                  </label>
+                  <label>
+                    Retning
+                    <select name="direction" defaultValue="shareholder_to_company">
+                      <option value="shareholder_to_company">Aksjonær til selskap</option>
+                      <option value="company_to_corporate_shareholder">Selskap til selskapsaksjonær</option>
+                      <option value="company_to_personal_shareholder">Selskap til personlig aksjonær</option>
+                    </select>
+                  </label>
+                  <label>
+                    Motpart
+                    <input name="counterpartyName" defaultValue="Ola Nordmann" required />
+                  </label>
+                  <label>
+                    Banktransaksjon
+                    <select name="bankTransactionId" defaultValue="">
+                      <option value="">Ingen bankmatch</option>
+                      {unmatchedTransactions.map((transaction) => (
+                        <option key={transaction.id} value={transaction.id}>
+                          {transaction.transaction_date} {transaction.text} {Number(transaction.amount).toFixed(2)} kr
+                        </option>
+                      ))}
+                    </select>
+                  </label>
+                  <label>
+                    Bilag
+                    <select name="documentId" defaultValue="">
+                      <option value="">Ingen bilagskobling</option>
+                      {documents.map((document) => (
+                        <option key={document.id} value={document.id}>
+                          {document.name}
+                        </option>
+                      ))}
+                    </select>
+                  </label>
+                  <label>
+                    Dokumentstatus
+                    <select name="documentStatus" defaultValue="attached">
+                      <option value="attached">Vedlagt</option>
+                      <option value="missing_accepted_warning">Mangler, akseptert varsel</option>
+                      <option value="not_required">Ikke påkrevd</option>
+                    </select>
+                  </label>
+                  <label>
+                    <input name="interestModelled" type="checkbox" />
+                    Rente er modellert
+                  </label>
+                  <label>
+                    <input name="relatedPartySecurity" type="checkbox" />
+                    Sikkerhet/garanti mellom nærstående
+                  </label>
+                  <button className="secondaryButton" type="submit">
+                    Poster aksjonærlån
+                  </button>
+                </form>
               </section>
 
               <section className="band">

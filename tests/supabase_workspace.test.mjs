@@ -28,6 +28,7 @@ import { simulateRf1086SubmissionWithPython } from "../app/lib/rf1086-submission
 import { assertAdvisoryCanBeAcknowledged, assertNoHardReviewBlocks } from "../app/lib/review.ts";
 import { sharePurchaseLedgerLines, validateSharePurchase } from "../app/lib/share-purchase.ts";
 import { shareSaleLedgerLines, validateShareSale } from "../app/lib/share-sale.ts";
+import { shareholderLoanLedgerLines, validateShareholderLoan } from "../app/lib/shareholder-loan.ts";
 
 const requiredEnv = ["SUPABASE_URL", "SUPABASE_ANON_KEY", "SUPABASE_SERVICE_ROLE_KEY"];
 
@@ -1278,6 +1279,123 @@ test(
       created_by: outsiderUser.id,
     });
     assert.ok(outsiderOwnerDividendActionInsertError);
+
+    assert.throws(
+      () =>
+        validateShareholderLoan({
+          loanDate: "2025-07-01",
+          amount: 20000,
+          direction: "company_to_personal_shareholder",
+          counterpartyName: "Ola Nordmann",
+          documentStatus: "attached",
+          interestModelled: false,
+          relatedPartySecurity: false,
+        }),
+      (error) => error?.code === "personal_shareholder_loan_blocked",
+    );
+    const loanDocumentId = randomUUID();
+    const { error: loanDocumentError } = await owner.from("documents").insert({
+      id: loanDocumentId,
+      company_id: companyId,
+      income_year: 2025,
+      document_type: "shareholder_loan_agreement",
+      name: "loan.pdf",
+      linked_to: "shareholder_loan",
+      status: "attached",
+      storage_key: `companies/${companyId}/2025/${loanDocumentId}/loan.pdf`,
+      created_by: ownerUser.id,
+    });
+    assert.ifError(loanDocumentError);
+    const { data: loanBankTransaction, error: loanBankTransactionError } = await owner
+      .from("bank_transactions")
+      .insert({
+        company_id: companyId,
+        income_year: 2025,
+        transaction_date: "2025-07-01",
+        text: "Loan from shareholder",
+        amount: 20000,
+        balance: 30950,
+        source_hash: `loan-bank-${randomUUID()}`,
+        created_by: ownerUser.id,
+      })
+      .select("id, amount")
+      .single();
+    assert.ifError(loanBankTransactionError);
+    const loanPayload = validateShareholderLoan({
+      loanDate: "2025-07-01",
+      amount: 20000,
+      direction: "shareholder_to_company",
+      counterpartyName: "Ola Nordmann",
+      documentStatus: "attached",
+      interestModelled: true,
+      relatedPartySecurity: false,
+      bankTransactionId: loanBankTransaction.id,
+      documentId: loanDocumentId,
+    });
+    const loanLines = shareholderLoanLedgerLines(loanPayload);
+    const { data: loanEntry, error: loanEntryError } = await owner
+      .from("ledger_entries")
+      .insert({
+        company_id: companyId,
+        income_year: 2025,
+        entry_type: "shareholder_loan",
+        memo: "Shareholder loan: Ola Nordmann",
+        lines: loanLines,
+        created_by: ownerUser.id,
+      })
+      .select("id, entry_type, lines")
+      .single();
+    assert.ifError(loanEntryError);
+    assert.equal(loanEntry.entry_type, "shareholder_loan");
+    assert.deepEqual(loanEntry.lines, loanLines);
+    const loanActionId = randomUUID();
+    const { data: loanAction, error: loanActionError } = await owner
+      .from("holding_actions")
+      .insert({
+        id: loanActionId,
+        company_id: companyId,
+        income_year: 2025,
+        action_type: "shareholder_loan",
+        action_date: loanPayload.loan_date,
+        payload: loanPayload,
+        ledger_entry_id: loanEntry.id,
+        bank_transaction_id: loanBankTransaction.id,
+        document_id: loanDocumentId,
+        risk_level: "ready",
+        created_by: ownerUser.id,
+      })
+      .select("id, action_type, ledger_entry_id, bank_transaction_id, document_id")
+      .single();
+    assert.ifError(loanActionError);
+    assert.equal(loanAction.action_type, "shareholder_loan");
+    assert.equal(loanAction.ledger_entry_id, loanEntry.id);
+    assert.equal(loanAction.bank_transaction_id, loanBankTransaction.id);
+    assert.equal(loanAction.document_id, loanDocumentId);
+    const { error: loanBankMatchError } = await owner
+      .from("bank_transactions")
+      .update({ matched_action_id: loanAction.id })
+      .eq("id", loanBankTransaction.id);
+    assert.ifError(loanBankMatchError);
+    const { data: reloadedLoanEntry, error: reloadedLoanEntryError } = await owner
+      .from("ledger_entries")
+      .select("id, entry_type")
+      .eq("id", loanEntry.id)
+      .single();
+    assert.ifError(reloadedLoanEntryError);
+    assert.equal(reloadedLoanEntry.entry_type, "shareholder_loan");
+    const { error: outsiderLoanActionInsertError } = await outsider.from("holding_actions").insert({
+      company_id: companyId,
+      income_year: 2025,
+      action_type: "shareholder_loan",
+      action_date: loanPayload.loan_date,
+      payload: loanPayload,
+      ledger_entry_id: loanEntry.id,
+      bank_transaction_id: loanBankTransaction.id,
+      document_id: loanDocumentId,
+      risk_level: "ready",
+      created_by: outsiderUser.id,
+    });
+    assert.ok(outsiderLoanActionInsertError);
 
     const manualJournal = validateManualJournal({
       warningAccepted: true,
