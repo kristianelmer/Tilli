@@ -6,7 +6,7 @@ from holding_core.billing import CompanyBillingAccount, production_filing_gate
 from holding_core.models import FilingCase
 from holding_core.readiness import assess_rf1086_readiness
 from holding_core.rf1086 import generate_rf1086
-from holding_core.rf1086_codes import production_code_blockers_for_case
+from holding_core.rf1086_codes import production_code_blockers_for_case, production_scope_exclusions_for_case
 from holding_core.security import SensitiveAction, StepUpContext, assert_step_up
 from holding_core.submission import (
     FilingSubmission,
@@ -54,6 +54,19 @@ def prepare_rf1086_submission(
                 "Produksjonsinnsending er utilgjengelig fordi offisiell RF-1086-kodeevidens "
                 f"ikke er bekreftet for: {blocked}. Talli kan bare simulere til Skatteetaten "
                 "har bekreftet kodene i dokumentasjon, kodeliste eller testmiljø."
+            ),
+        )
+
+    exclusions = production_scope_exclusions_for_case(case)
+    if exclusions:
+        excluded = ", ".join(f"{decision.event}={decision.code_value}" for decision in exclusions)
+        return mark_blocked_failure(
+            submission,
+            code="RF1086_EVENT_UNSUPPORTED",
+            message=(
+                "Produksjonsinnsending er bare åpnet for stiftelse/no-activity RF-1086. "
+                f"Disse hendelsene er ekskludert fra live filing til Skatteetaten-evidens foreligger: {excluded}. "
+                "Talli kan fortsatt simulere og eksportere forhåndsvisning."
             ),
         )
 

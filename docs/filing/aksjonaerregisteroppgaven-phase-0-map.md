@@ -680,17 +680,17 @@ Local source of truth: `holding_core.rf1086_codes`.
 | Event | Field | Local value | Evidence status | Public evidence | Production status |
 | --- | --- | ---: | --- | --- | --- |
 | Stiftelse | `AksjerNyutstedteStiftelseMvType` / `AksjeErvervType` | `N` | `verified` | Skatteetaten API example observed in public docs | Code-value gate passes; live filing still waits for full production/test-environment gate |
-| Kjøp | `AksjeErvervType` | `K` | `still_blocked` | Skatteetaten examples state buyer post 23 uses transaction type `kjøp`; XSD does not verify `K` | Production blocker until code value is confirmed |
-| Salg | `AksjerArvMvOmsattType` | `S` | `still_blocked` | Skatteetaten examples state seller post 25 uses transaction type `salg`; XSD does not verify `S` | Production blocker until code value is confirmed |
-| Utbytte | `AksjeUtbytteHendelsestype` | `U` | `still_blocked` | Local XSD accepts free text; public sources reviewed do not verify `U` | Production blocker until code value is confirmed |
+| Kjøp | `AksjeErvervType` | `K` | `excluded_from_live_scope` | Skatteetaten examples state buyer post 23 uses transaction type `kjøp`; XSD does not verify `K` | Excluded from live filing until code value is confirmed |
+| Salg | `AksjerArvMvOmsattType` | `S` | `excluded_from_live_scope` | Skatteetaten examples state seller post 25 uses transaction type `salg`; XSD does not verify `S` | Excluded from live filing until code value is confirmed |
+| Utbytte | `AksjeUtbytteHendelsestype` | `U` | `excluded_from_live_scope` | Local XSD accepts free text; public sources reviewed do not verify `U` | Excluded from live filing until code value is confirmed |
 
 Decision:
 
 - Keep generating simulation XML with the current local values so fixture coverage continues.
 - Do not allow production direct filing for cases that require `K`, `S`, or `U` until those exact values are confirmed through official docs, a code list, or Skatteetaten test-environment acceptance.
-- Surface the user-facing blocker text from `prepare_rf1086_submission`: production submission is unavailable until official RF-1086 code evidence is confirmed.
-- Keep the blocker in code, docs, and tests so it cannot be treated as merely a TODO.
-- 2026-06-14 HITL decision: preserve the blockers for `K`, `S`, and `U`. The current implementation uses `production_code_blockers_for_case` so stiftelse-only cases can pass the code-value gate, while share-sale and dividend cases remain blocked for production submission.
+- Surface the user-facing blocker text from `prepare_rf1086_submission`: production submission is only opened for stiftelse/no-activity and purchase/sale/dividend events are excluded from live filing.
+- Keep the exclusion in code, docs, and tests so it cannot be treated as merely a TODO.
+- 2026-06-16 HITL decision: exclude `K`, `S`, and `U` event types from live filing scope. The current implementation uses `production_scope_exclusions_for_case` so stiftelse-only cases can pass the code-value gate, while share-sale and dividend cases remain blocked as unsupported live events.
 
 ## Phase 0 Conclusion
 

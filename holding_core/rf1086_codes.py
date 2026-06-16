@@ -11,6 +11,7 @@ class CodeVerificationStatus(StrEnum):
     VERIFIED = "verified"
     REJECTED = "rejected"
     STILL_BLOCKED = "still_blocked"
+    EXCLUDED_FROM_LIVE_SCOPE = "excluded_from_live_scope"
 
 
 class Rf1086CodeDecision(BaseModel):
@@ -49,11 +50,13 @@ RF1086_CODE_DECISIONS: tuple[Rf1086CodeDecision, ...] = (
         field_name="AksjeErvervType-datadef-17745",
         code_value=ACQUISITION_PURCHASE_CODE,
         public_label="kjøp",
-        verification_status=CodeVerificationStatus.STILL_BLOCKED,
-        production_blocker=True,
+        verification_status=CodeVerificationStatus.EXCLUDED_FROM_LIVE_SCOPE,
+        production_blocker=False,
         authority_note=(
             "Skatteetaten public examples document the purchase label and reporting position, "
-            "but the local XSD leaves the field as free text and does not verify the K code value."
+            "but the local XSD leaves the field as free text and does not verify the K code value. "
+            "Production live filing excludes purchase/sale events until official code-list evidence "
+            "or test-environment acceptance is recorded."
         ),
         sources=(
             "https://www.skatteetaten.no/bedrift-og-organisasjon/rapportering-og-bransjer/aksjonarregisteroppgaven/eksempler-pa-utfylling-av-aksjonarregisteroppgaven/",
@@ -64,11 +67,13 @@ RF1086_CODE_DECISIONS: tuple[Rf1086CodeDecision, ...] = (
         field_name="AksjerArvMvOmsattType-datadef-17753",
         code_value=DISPOSAL_SALE_CODE,
         public_label="salg",
-        verification_status=CodeVerificationStatus.STILL_BLOCKED,
-        production_blocker=True,
+        verification_status=CodeVerificationStatus.EXCLUDED_FROM_LIVE_SCOPE,
+        production_blocker=False,
         authority_note=(
             "Skatteetaten public examples document the sale label and reporting position, "
-            "but the local XSD leaves the field as free text and does not verify the S code value."
+            "but the local XSD leaves the field as free text and does not verify the S code value. "
+            "Production live filing excludes purchase/sale events until official code-list evidence "
+            "or test-environment acceptance is recorded."
         ),
         sources=(
             "https://www.skatteetaten.no/bedrift-og-organisasjon/rapportering-og-bransjer/aksjonarregisteroppgaven/eksempler-pa-utfylling-av-aksjonarregisteroppgaven/",
@@ -79,11 +84,12 @@ RF1086_CODE_DECISIONS: tuple[Rf1086CodeDecision, ...] = (
         field_name="AksjeUtbytteHendelsestype-datadef-36564",
         code_value=DIVIDEND_DISTRIBUTION_CODE,
         public_label="utbytte",
-        verification_status=CodeVerificationStatus.STILL_BLOCKED,
-        production_blocker=True,
+        verification_status=CodeVerificationStatus.EXCLUDED_FROM_LIVE_SCOPE,
+        production_blocker=False,
         authority_note=(
             "Dividend event type is accepted by local XSD shape, but public sources reviewed do not verify "
-            "the U code value for production direct filing."
+            "the U code value for production direct filing. Production live filing excludes dividend events "
+            "until official code-list evidence or test-environment acceptance is recorded."
         ),
         sources=("docs/filing/aksjonaerregisteroppgaveHovedskjema.xsd",),
     ),
@@ -96,6 +102,14 @@ def rf1086_code_decisions() -> tuple[Rf1086CodeDecision, ...]:
 
 def production_code_blockers() -> tuple[Rf1086CodeDecision, ...]:
     return tuple(decision for decision in RF1086_CODE_DECISIONS if decision.production_blocker)
+
+
+def production_scope_exclusions() -> tuple[Rf1086CodeDecision, ...]:
+    return tuple(
+        decision
+        for decision in RF1086_CODE_DECISIONS
+        if decision.verification_status == CodeVerificationStatus.EXCLUDED_FROM_LIVE_SCOPE
+    )
 
 
 def rf1086_code_decisions_for_case(case: FilingCase) -> tuple[Rf1086CodeDecision, ...]:
@@ -115,6 +129,14 @@ def rf1086_code_decisions_for_case(case: FilingCase) -> tuple[Rf1086CodeDecision
 
 def production_code_blockers_for_case(case: FilingCase) -> tuple[Rf1086CodeDecision, ...]:
     return tuple(decision for decision in rf1086_code_decisions_for_case(case) if decision.production_blocker)
+
+
+def production_scope_exclusions_for_case(case: FilingCase) -> tuple[Rf1086CodeDecision, ...]:
+    return tuple(
+        decision
+        for decision in rf1086_code_decisions_for_case(case)
+        if decision.verification_status == CodeVerificationStatus.EXCLUDED_FROM_LIVE_SCOPE
+    )
 
 
 def assert_rf1086_production_codes_verified(case: FilingCase) -> None:

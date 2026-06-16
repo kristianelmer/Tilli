@@ -1,7 +1,7 @@
 # RF-1086 Production Submission Runbook
 
 Status: production blocked until human review and official validation  
-Last updated: 2026-06-14  
+Last updated: 2026-06-16  
 Target filing: `aksjonærregisteroppgaven` / RF-1086
 
 This runbook defines the path from local RF-1086 simulation to live submission. It is not permission to enable production filing. Live filing remains disabled until authority access, test-environment evidence, RF-1086 code decisions, billing, security, and human review gates are complete.
@@ -74,25 +74,25 @@ Blocked failures:
 
 Every failure must preserve the submission state and be visible to the user/operator without silently resubmitting.
 
-## Current RF-1086 Production Blockers
+## Current RF-1086 Production Scope
 
-As of 2026-06-14:
+As of 2026-06-16:
 
 - `N` for stiftelse has evidence status `verified`; it is observed in Skatteetaten public API example and has no local RF-1086 code-value blocker.
-- `K` for kjøp has evidence status `still_blocked`.
-- `S` for salg has evidence status `still_blocked`.
-- `U` for utbytte has evidence status `still_blocked`.
+- `K` for kjøp is excluded from live filing scope until official code-list evidence or Skatteetaten test-environment acceptance is recorded.
+- `S` for salg is excluded from live filing scope until official code-list evidence or Skatteetaten test-environment acceptance is recorded.
+- `U` for utbytte is excluded from live filing scope until official code-list evidence or Skatteetaten test-environment acceptance is recorded.
 
-The public examples identify labels and reporting positions, but the public XSDs do not prove these exact code values. The blocker can be cleared only by official docs/code list or Skatteetaten test-environment acceptance recorded in the code-decision registry and filing docs.
+The public examples identify labels and reporting positions, but the public XSDs do not prove these exact code values. To avoid guessed production filing, Talli's RF-1086 live scope is limited to stiftelse/no-activity cases. Share-sale and dividend cases can still be simulated and exported, but production submission returns `RF1086_EVENT_UNSUPPORTED`.
 
-User-facing blocker text must explain that production submission is unavailable until official RF-1086 code evidence is confirmed.
+User-facing blocker text must explain that production submission is unavailable for purchase/sale/dividend events until official RF-1086 code evidence or test-environment acceptance is recorded.
 
 ## Human Review Before Live Filing
 
 Production credentials/live filing may be enabled only after a named reviewer signs off:
 
 - Authority access and system-user flow tested.
-- RF-1086 code blockers cleared or unsupported cases excluded from live filing.
+- RF-1086 unsupported events remain excluded from live filing unless official code evidence is recorded.
 - Test-environment submission and feedback retrieval completed with evidence.
 - Security baseline and restore test completed.
 - Launch claims reviewed.

@@ -35,7 +35,7 @@ class Rf1086ProductionSubmissionTest(unittest.TestCase):
         self.assertEqual(submission.status, SubmissionStatus.FAILED_BLOCKED)
         self.assertEqual(submission.failure_code, "subscription_required")
 
-    def test_unverified_transaction_codes_block_production_prep(self) -> None:
+    def test_excluded_transaction_events_block_production_prep(self) -> None:
         case = FilingCase.from_json_file(FIXTURE_DIR / "share_sale.json")
         account = assign_standard_pricing(case.company.org_number).model_copy(
             update={"subscription_active": True, "filing_package_paid": True}
@@ -44,11 +44,11 @@ class Rf1086ProductionSubmissionTest(unittest.TestCase):
         submission = prepare_rf1086_submission(case, account)
 
         self.assertEqual(submission.status, SubmissionStatus.FAILED_BLOCKED)
-        self.assertEqual(submission.failure_code, "RF1086_CODE_UNVERIFIED")
+        self.assertEqual(submission.failure_code, "RF1086_EVENT_UNSUPPORTED")
         self.assertIn("kjop=K", submission.failure_message or "")
         self.assertIn("salg=S", submission.failure_message or "")
-        self.assertIn("Produksjonsinnsending er utilgjengelig", submission.failure_message or "")
-        self.assertIn("offisiell RF-1086-kodeevidens", submission.failure_message or "")
+        self.assertIn("bare åpnet for stiftelse/no-activity", submission.failure_message or "")
+        self.assertIn("ekskludert fra live filing", submission.failure_message or "")
 
     def test_verified_stiftelse_code_passes_rf1086_code_gate(self) -> None:
         case = FilingCase.from_json_file(FIXTURE_DIR / "stiftelse.json")

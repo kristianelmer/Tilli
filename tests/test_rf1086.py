@@ -17,6 +17,7 @@ from holding_core.rf1086_codes import (
     FORMATION_STIFTELSE_CODE,
     production_code_blockers,
     production_code_blockers_for_case,
+    production_scope_exclusions_for_case,
     rf1086_code_decisions,
 )
 from holding_core.validation import run_rf1086_validation
@@ -234,7 +235,7 @@ class Rf1086SimulationTest(unittest.TestCase):
         self.assertIn("<AksjerKjopAntall-datadef-12153 orid=\"12153\">40</AksjerKjopAntall-datadef-12153>", founder_b_xml)
         self.assertIn("<AksjeAnskaffelsesverdi-datadef-17636 orid=\"17636\">12000</AksjeAnskaffelsesverdi-datadef-17636>", founder_b_xml)
 
-    def test_transaction_code_registry_marks_public_label_only_values_as_production_blockers(self) -> None:
+    def test_transaction_code_registry_excludes_unverified_values_from_live_scope(self) -> None:
         decisions = {decision.event: decision for decision in rf1086_code_decisions()}
         blockers = {decision.event for decision in production_code_blockers()}
 
@@ -242,12 +243,15 @@ class Rf1086SimulationTest(unittest.TestCase):
         self.assertEqual(decisions["stiftelse"].verification_status, CodeVerificationStatus.VERIFIED)
         self.assertFalse(decisions["stiftelse"].production_blocker)
         self.assertEqual(decisions["kjop"].code_value, ACQUISITION_PURCHASE_CODE)
-        self.assertEqual(decisions["kjop"].verification_status, CodeVerificationStatus.STILL_BLOCKED)
+        self.assertEqual(decisions["kjop"].verification_status, CodeVerificationStatus.EXCLUDED_FROM_LIVE_SCOPE)
+        self.assertFalse(decisions["kjop"].production_blocker)
         self.assertEqual(decisions["salg"].code_value, DISPOSAL_SALE_CODE)
-        self.assertEqual(decisions["salg"].verification_status, CodeVerificationStatus.STILL_BLOCKED)
+        self.assertEqual(decisions["salg"].verification_status, CodeVerificationStatus.EXCLUDED_FROM_LIVE_SCOPE)
+        self.assertFalse(decisions["salg"].production_blocker)
         self.assertEqual(decisions["utbytte"].code_value, DIVIDEND_DISTRIBUTION_CODE)
-        self.assertEqual(decisions["utbytte"].verification_status, CodeVerificationStatus.STILL_BLOCKED)
-        self.assertEqual(blockers, {"kjop", "salg", "utbytte"})
+        self.assertEqual(decisions["utbytte"].verification_status, CodeVerificationStatus.EXCLUDED_FROM_LIVE_SCOPE)
+        self.assertFalse(decisions["utbytte"].production_blocker)
+        self.assertEqual(blockers, set())
 
     def test_generated_xml_uses_central_transaction_code_registry(self) -> None:
         sale_case = FilingCase.from_json_file(FIXTURE_DIR / "share_sale.json")
@@ -271,12 +275,15 @@ class Rf1086SimulationTest(unittest.TestCase):
         dividend = FilingCase.from_json_file(FIXTURE_DIR / "dividend.json")
 
         self.assertEqual(production_code_blockers_for_case(stiftelse), ())
+        self.assertEqual(production_scope_exclusions_for_case(stiftelse), ())
+        self.assertEqual(production_code_blockers_for_case(share_sale), ())
         self.assertEqual(
-            {decision.event for decision in production_code_blockers_for_case(share_sale)},
+            {decision.event for decision in production_scope_exclusions_for_case(share_sale)},
             {"kjop", "salg"},
         )
+        self.assertEqual(production_code_blockers_for_case(dividend), ())
         self.assertEqual(
-            {decision.event for decision in production_code_blockers_for_case(dividend)},
+            {decision.event for decision in production_scope_exclusions_for_case(dividend)},
             {"utbytte"},
         )
 
