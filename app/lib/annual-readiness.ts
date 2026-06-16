@@ -166,7 +166,7 @@ function commonReadinessIssues(input: AnnualReadinessInput, obligation: Authorit
     issues.push(block("billing_account_missing", "Billingkonto må finnes før filingpakke og innsending.", "billing"));
   } else {
     const billingGate = productionBillingGate(input.billingAccount, true);
-    if (billingGate.status !== "ready_for_production_filing") {
+    if (!["ready_for_production_filing", "filing_package_required"].includes(billingGate.status)) {
       issues.push(block(billingGate.status, billingGate.message, "billing"));
     }
   }
