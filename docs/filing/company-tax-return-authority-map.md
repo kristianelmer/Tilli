@@ -1,7 +1,7 @@
 # Skattemelding for AS Authority Map
 
 Status: source-backed map for simulation and validation  
-Research date: 2026-06-14  
+Research date: 2026-06-16  
 Target filing: `skattemelding for AS` / company tax return
 
 This map defines what Talli can validate from public sources before production company-tax-return filing. It is not a complete production integration spec.
@@ -74,6 +74,21 @@ Blocked or unsupported:
 - Company-to-personal-shareholder loans without accountant review.
 - Audit or auditor-signature-dependent cases.
 
+## Launch Schema Decisions
+
+These decisions are the source-backed launch schema for simple holding AS tax return work. A row marked `blocked` must not be treated as production-ready.
+
+| Authority requirement | Source evidence | Talli source data | Launch decision |
+| --- | --- | --- | --- |
+| Filing via system | Skatteetaten states company tax returns for AS must be retrieved and submitted through an accounting or year-end system. | Talli app/backend | Supported as product direction; direct filing remains blocked until system-supplier flow is implemented. |
+| Deadline | Skatteetaten states the ordinary deadline is 31 May each year. | `deadlines`, `filing_readiness_snapshots` | Supported as deadline/readiness data. |
+| No-activity companies | Skatteetaten states the tax return must be filed even if the company has had no turnover. | `annual_data.no_activity_confirmed` | Supported for readiness; payload remains blocked. |
+| Tax return plus business specification | Skatteetaten states the company must retrieve and submit the tax return with `næringsspesifikasjon` through the system. | `ledger_entries`, `holding_actions`, `annual_data` | Blocked until current schema/code-list field mapping exists. |
+| Validation before submission | Skatteetaten states validation checks the tax return and business specification before submission and returns feedback. | future validation adapter, `filing_submissions.feedback_items` | Blocked until validation service integration and feedback mapping exist. |
+| Altinn receipt/archive | Skatteetaten states receipt and submitted information are available in Altinn archive after signed submission. | `filing_submissions`, archive export | Simulation only; official receipt/archive retrieval is blocked. |
+| Access packages/roles | Skatteetaten lists supported access packages and roles and notes transition from old Altinn roles to access packages. | `authority_permissions` | Readiness supported; production access package/delegation flow blocked. |
+| `skattemelding upersonlig` API | Skatteetaten API docs state this service delivers information appearing in a company's tax return. | potential import/pre-fill adapter | Data-reading candidate only; not evidence of production submission. |
+
 ## Mapping to Current Engine
 
 Current engine coverage:
@@ -94,6 +109,18 @@ Missing before production:
 - Official receipt/status storage.
 - Official test-environment acceptance.
 
+Current tax preview field decisions:
+
+| Current preview field | Authority mapping decision |
+| --- | --- |
+| Result before tax | Derived display value only. Blocked until mapped to current `skattemelding`/`næringsspesifikasjon` field ids. |
+| Dividend income under `fritaksmetoden` | Supported as Talli domain concept, but production blocked until mapped to current tax-return/business-specification fields and code lists. |
+| 3 percent `fritaksmetoden` add-back | Supported as simulation calculation, but production blocked until exact authority field(s), calculation basis, and rounding rules are confirmed. |
+| Admin costs | Supported ledger input, but production blocked until deductible-cost fields in `næringsspesifikasjon` are mapped. |
+| Estimated tax at 22 percent | Simulation only. The submitted tax return should not rely on this as an authority payload field. |
+| Tax settlement/payment/refund records | Archive/readiness data only. Not a company tax-return payload mapping yet. |
+| Company-to-personal-shareholder loan | Blocked before production; requires accountant review and authority field mapping. |
+
 ## Production Blockers
 
 - Identify the exact current submission API/flow for company tax return, separate from the `skattemelding upersonlig` data API.
@@ -101,3 +128,11 @@ Missing before production:
 - Map Talli ledger/tax concepts to `skattemelding` and `næringsspesifikasjon` fields.
 - Validate generated payloads against official schemas and test environment.
 - Confirm access package, Maskinporten/Altinn delegation, signing, feedback, and receipt behavior for owner-managed filing.
+
+## Follow-Up Implementation Slices
+
+1. Add `skattemelding_payload_map` for simple holding AS, covering result, balance, dividends, `fritaksmetoden` add-back, admin costs, and basic equity/debt fields.
+2. Add `næringsspesifikasjon` schema/code-list validation harness for the active income year.
+3. Add Skatteetaten validation adapter behind a disabled production gate and persist structured validation feedback.
+4. Add access-package/delegation runbook for owner-managed AS filing through Talli.
+5. Add no-activity tax-return fixture that proves the filing is still required and maps to the minimum valid payload once schemas are confirmed.
