@@ -20,6 +20,7 @@ import {
 } from "../app/lib/dividend-received.ts";
 import { COMPANY_DOCUMENTS_BUCKET, documentStorageKey } from "../app/lib/documents.ts";
 import { assertNoBlockingFilingOverrides, validateFilingOverride } from "../app/lib/filing-overrides.ts";
+import { invitationDeliveryEvent, invitationExpiry, invitationTokenHash } from "../app/lib/invitations.ts";
 import { validateManualJournal } from "../app/lib/manual-journal.ts";
 import { openingBalanceLedgerLines } from "../app/lib/opening-balance.ts";
 import {
@@ -176,10 +177,12 @@ test(
   const outsiderUser = await createConfirmedUser("outsider");
   const reviewerUser = await createConfirmedUser("reviewer");
   const readOnlyUser = await createConfirmedUser("readonly");
+  const inviteeUser = await createConfirmedUser("invitee");
   const owner = await signIn(ownerUser);
   const outsider = await signIn(outsiderUser);
   const reviewer = await signIn(reviewerUser);
   const readOnly = await signIn(readOnlyUser);
+  const invitee = await signIn(inviteeUser);
   const orgNumber = `${Math.floor(100000000 + Math.random() * 899999999)}`;
   let companyId;
 
@@ -272,6 +275,114 @@ test(
       auditRows.map((row) => row.action),
       ["workspace_created"],
     );
+
+    const invitationToken = randomUUID();
+    const invitationHash = await invitationTokenHash(invitationToken);
+    const invitationEvent = invitationDeliveryEvent({
+      recipientEmail: inviteeUser.email,
+      queuedAt: new Date().toISOString(),
+    });
+    const { data: invitation, error: invitationError } = await owner
+      .from("company_invitations")
+      .insert({
+        company_id: companyId,
+        invited_email: inviteeUser.email,
+        role: "reviewer",
+        token_hash: invitationHash,
+        status: "pending",
+        expires_at: invitationExpiry(),
+        invited_by: ownerUser.id,
+        delivery_events: [invitationEvent],
+      })
+      .select("id, company_id, invited_email, role, status, expires_at")
+      .single();
+    assert.ifError(invitationError);
+    assert.equal(invitation.invited_email, inviteeUser.email);
+
+    const { error: outboxError } = await owner.from("notification_outbox").insert({
+      company_id: companyId,
+      recipient_email: inviteeUser.email,
+      template: "workspace_invitation",
+      payload: { invitationId: invitation.id },
+      status: "queued",
+      created_by: ownerUser.id,
+    });
+    assert.ifError(outboxError);
+
+    const { data: inviteeInvitations, error: inviteeInvitationReadError } = await invitee
+      .from("company_invitations")
+      .select("id, role, status")
+      .eq("id", invitation.id);
+    assert.ifError(inviteeInvitationReadError);
+    assert.deepEqual(inviteeInvitations, [{ id: invitation.id, role: "reviewer", status: "pending" }]);
+
+    const acceptedAt = new Date().toISOString();
+    const { error: acceptedMembershipError } = await invitee.from("company_memberships").insert({
+      company_id: companyId,
+      user_id: inviteeUser.id,
+      role: "reviewer",
+      invited_by: ownerUser.id,
+      accepted_at: acceptedAt,
+    });
+    assert.ifError(acceptedMembershipError);
+
+    const { error: acceptedInvitationError } = await invitee
+      .from("company_invitations")
+      .update({
+        invited_user_id: inviteeUser.id,
+        status: "accepted",
+        accepted_by: inviteeUser.id,
+        accepted_at: acceptedAt,
+      })
+      .eq("id", invitation.id);
+    assert.ifError(acceptedInvitationError);
+
+    const { data: acceptedInvitation, error: acceptedInvitationReadError } = await owner
+      .from("company_invitations")
+      .select("status, accepted_by")
+      .eq("id", invitation.id)
+      .single();
+    assert.ifError(acceptedInvitationReadError);
+    assert.deepEqual(acceptedInvitation, { status: "accepted", accepted_by: inviteeUser.id });
+
+    const revokeTokenHash = await invitationTokenHash(randomUUID());
+    const { data: revokedCandidate, error: revokedCandidateError } = await owner
+      .from("company_invitations")
+      .insert({
+        company_id: companyId,
+        invited_email: `revoke-${inviteeUser.email}`,
+        role: "read_only",
+        token_hash: revokeTokenHash,
+        status: "pending",
+        expires_at: invitationExpiry(),
+        invited_by: ownerUser.id,
+        delivery_events: [invitationDeliveryEvent({ recipientEmail: `revoke-${inviteeUser.email}` })],
+      })
+      .select("id")
+      .single();
+    assert.ifError(revokedCandidateError);
+    const revokedAt = new Date().toISOString();
+    const { error: revokeError } = await owner
+      .from("company_invitations")
+      .update({ status: "revoked", revoked_by: ownerUser.id, revoked_at: revokedAt })
+      .eq("id", revokedCandidate.id);
+    assert.ifError(revokeError);
+
+    const { data: ownerOutboxRows, error: ownerOutboxReadError } = await owner
+      .from("notification_outbox")
+      .select("recipient_email, template, status")
+      .eq("company_id", companyId);
+    assert.ifError(ownerOutboxReadError);
+    assert.deepEqual(ownerOutboxRows, [
+      { recipient_email: inviteeUser.email, template: "workspace_invitation", status: "queued" },
+    ]);
+
+    const { data: inviteeOutboxRows, error: inviteeOutboxReadError } = await invitee
+      .from("notification_outbox")
+      .select("id")
+      .eq("company_id", companyId);
+    assert.ifError(inviteeOutboxReadError);
+    assert.deepEqual(inviteeOutboxRows, []);
 
     const { data: stepUpEvent, error: stepUpError } = await owner
       .from("step_up_events")
@@ -2216,6 +2327,7 @@ test(
     await admin.auth.admin.deleteUser(outsiderUser.id);
     await admin.auth.admin.deleteUser(reviewerUser.id);
     await admin.auth.admin.deleteUser(readOnlyUser.id);
+    await admin.auth.admin.deleteUser(inviteeUser.id);
   }
   },
 );

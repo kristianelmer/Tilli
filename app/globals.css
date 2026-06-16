@@ -348,6 +348,17 @@ h2 {
   font-size: 24px;
 }
 
+.inlineActions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  margin-top: 14px;
+}
+
+.inlineActions form {
+  margin: 0;
+}
+
 [data-status="Ready"] {
   color: var(--accent);
 }

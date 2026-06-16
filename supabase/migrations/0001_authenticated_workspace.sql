@@ -39,6 +39,56 @@ create table if not exists public.company_memberships (
 alter table public.company_memberships add column if not exists accepted_at timestamptz;
 alter table public.company_memberships add column if not exists created_at timestamptz not null default now();
 
+create table if not exists public.company_invitations (
+  id uuid primary key default gen_random_uuid(),
+  company_id uuid not null references public.companies(id) on delete cascade,
+  invited_email text not null check (invited_email = lower(invited_email) and invited_email like '%@%'),
+  invited_user_id uuid references auth.users(id) on delete set null,
+  role text not null check (role in ('reviewer', 'read_only')),
+  token_hash text not null unique check (token_hash <> ''),
+  status text not null default 'pending' check (status in ('pending', 'accepted', 'revoked', 'expired')),
+  expires_at timestamptz not null,
+  invited_by uuid not null references auth.users(id) on delete restrict,
+  accepted_by uuid references auth.users(id) on delete restrict,
+  accepted_at timestamptz,
+  revoked_by uuid references auth.users(id) on delete restrict,
+  revoked_at timestamptz,
+  resent_at timestamptz,
+  delivery_events jsonb not null default '[]'::jsonb,
+  created_at timestamptz not null default now(),
+  updated_at timestamptz not null default now(),
+  check (status <> 'accepted' or (accepted_by is not null and accepted_at is not null)),
+  check (status <> 'revoked' or (revoked_by is not null and revoked_at is not null))
+);
+
+create table if not exists public.notification_outbox (
+  id uuid primary key default gen_random_uuid(),
+  company_id uuid not null references public.companies(id) on delete cascade,
+  recipient_email text not null check (recipient_email = lower(recipient_email) and recipient_email like '%@%'),
+  template text not null check (template <> ''),
+  payload jsonb not null default '{}'::jsonb,
+  status text not null default 'queued' check (status in ('queued', 'sent', 'failed')),
+  created_by uuid not null references auth.users(id) on delete restrict,
+  created_at timestamptz not null default now()
+);
+
+create or replace function public.can_accept_company_invitation(target_company_id uuid, target_role text)
+returns boolean
+language sql
+security definer
+set search_path = public
+as $$
+  select exists (
+    select 1
+    from public.company_invitations i
+    where i.company_id = target_company_id
+      and i.role = target_role
+      and i.status = 'pending'
+      and i.expires_at > now()
+      and i.invited_email = lower(coalesce((auth.jwt() ->> 'email'), ''))
+  );
+$$;
+
 create table if not exists public.audit_events (
   id uuid primary key default gen_random_uuid(),
   company_id uuid not null references public.companies(id) on delete cascade,
@@ -348,6 +398,9 @@ create table if not exists public.authority_permissions (
 
 create index if not exists companies_created_by_idx on public.companies(created_by);
 create index if not exists company_memberships_user_id_idx on public.company_memberships(user_id);
+create index if not exists company_invitations_company_status_idx on public.company_invitations(company_id, status, updated_at desc);
+create index if not exists company_invitations_invited_email_idx on public.company_invitations(invited_email, status);
+create index if not exists notification_outbox_company_created_idx on public.notification_outbox(company_id, created_at desc);
 create index if not exists audit_events_company_id_created_at_idx on public.audit_events(company_id, created_at desc);
 create index if not exists step_up_events_actor_verified_idx on public.step_up_events(actor_id, mfa_verified_at desc);
 create index if not exists documents_company_id_income_year_idx on public.documents(company_id, income_year);
@@ -371,6 +424,8 @@ create index if not exists authority_permissions_company_obligation_idx on publi
 
 alter table public.companies enable row level security;
 alter table public.company_memberships enable row level security;
+alter table public.company_invitations enable row level security;
+alter table public.notification_outbox enable row level security;
 alter table public.audit_events enable row level security;
 alter table public.step_up_events enable row level security;
 alter table public.documents enable row level security;
@@ -393,6 +448,8 @@ alter table public.authority_permissions enable row level security;
 grant usage on schema public to authenticated;
 grant select, insert, update on public.companies to authenticated;
 grant select, insert, update on public.company_memberships to authenticated;
+grant select, insert, update on public.company_invitations to authenticated;
+grant select, insert, update on public.notification_outbox to authenticated;
 grant select, insert on public.audit_events to authenticated;
 grant select, insert on public.step_up_events to authenticated;
 grant select, insert on public.documents to authenticated;
@@ -473,6 +530,110 @@ on public.company_memberships for update
 to authenticated
 using (user_id = (select auth.uid()))
 with check (user_id = (select auth.uid()));
+
+drop policy if exists "invited users can accept company memberships" on public.company_memberships;
+create policy "invited users can accept company memberships"
+on public.company_memberships for insert
+to authenticated
+with check (
+  user_id = (select auth.uid())
+  and role in ('reviewer', 'read_only')
+  and accepted_at is not null
+  and public.can_accept_company_invitation(company_memberships.company_id, company_memberships.role)
+);
+
+drop policy if exists "owners and invitees can read company invitations" on public.company_invitations;
+create policy "owners and invitees can read company invitations"
+on public.company_invitations for select
+to authenticated
+using (
+  invited_email = lower(coalesce((auth.jwt() ->> 'email'), ''))
+  or exists (
+    select 1
+    from public.company_memberships m
+    where m.company_id = company_invitations.company_id
+      and m.user_id = (select auth.uid())
+      and m.role = 'owner'
+  )
+);
+
+drop policy if exists "owners can create company invitations" on public.company_invitations;
+create policy "owners can create company invitations"
+on public.company_invitations for insert
+to authenticated
+with check (
+  invited_by = (select auth.uid())
+  and role in ('reviewer', 'read_only')
+  and status = 'pending'
+  and exists (
+    select 1
+    from public.company_memberships m
+    where m.company_id = company_invitations.company_id
+      and m.user_id = (select auth.uid())
+      and m.role = 'owner'
+  )
+);
+
+drop policy if exists "owners and invitees can update company invitations" on public.company_invitations;
+create policy "owners and invitees can update company invitations"
+on public.company_invitations for update
+to authenticated
+using (
+  invited_email = lower(coalesce((auth.jwt() ->> 'email'), ''))
+  or exists (
+    select 1
+    from public.company_memberships m
+    where m.company_id = company_invitations.company_id
+      and m.user_id = (select auth.uid())
+      and m.role = 'owner'
+  )
+)
+with check (
+  (
+    status = 'accepted'
+    and accepted_by = (select auth.uid())
+    and invited_email = lower(coalesce((auth.jwt() ->> 'email'), ''))
+  )
+  or (
+    invited_by = (select auth.uid())
+    and exists (
+      select 1
+      from public.company_memberships m
+      where m.company_id = company_invitations.company_id
+        and m.user_id = (select auth.uid())
+        and m.role = 'owner'
+    )
+  )
+);
+
+drop policy if exists "owners can read notification outbox" on public.notification_outbox;
+create policy "owners can read notification outbox"
+on public.notification_outbox for select
+to authenticated
+using (
+  exists (
+    select 1
+    from public.company_memberships m
+    where m.company_id = notification_outbox.company_id
+      and m.user_id = (select auth.uid())
+      and m.role = 'owner'
+  )
+);
+
+drop policy if exists "owners can create notification outbox rows" on public.notification_outbox;
+create policy "owners can create notification outbox rows"
+on public.notification_outbox for insert
+to authenticated
+with check (
+  created_by = (select auth.uid())
+  and exists (
+    select 1
+    from public.company_memberships m
+    where m.company_id = notification_outbox.company_id
+      and m.user_id = (select auth.uid())
+      and m.role = 'owner'
+  )
+);
 
 drop policy if exists "company members can read audit events" on public.audit_events;
 create policy "company members can read audit events"

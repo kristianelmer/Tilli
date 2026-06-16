@@ -277,6 +277,37 @@ export type AuthorityPermissionRow = {
   updated_at: string;
 };
 
+export type WorkspaceInvitationRow = {
+  id: string;
+  company_id: string;
+  invited_email: string;
+  invited_user_id: string | null;
+  role: "reviewer" | "read_only";
+  token_hash: string;
+  status: "pending" | "accepted" | "revoked" | "expired";
+  expires_at: string;
+  invited_by: string;
+  accepted_by: string | null;
+  accepted_at: string | null;
+  revoked_by: string | null;
+  revoked_at: string | null;
+  resent_at: string | null;
+  delivery_events: unknown[];
+  created_at: string;
+  updated_at: string;
+};
+
+export type NotificationOutboxRow = {
+  id: string;
+  company_id: string;
+  recipient_email: string;
+  template: string;
+  payload: Record<string, unknown>;
+  status: "queued" | "sent" | "failed";
+  created_by: string;
+  created_at: string;
+};
+
 export function hasSupabaseEnv() {
   return Boolean(process.env.SUPABASE_URL && process.env.SUPABASE_ANON_KEY);
 }
@@ -587,6 +618,40 @@ export async function listAuthorityPermissions(companyIds: string[]) {
 
   return {
     authorityPermissions: (data ?? []) as AuthorityPermissionRow[],
+    error: error?.message ?? null,
+  };
+}
+
+export async function listWorkspaceInvitations(companyIds: string[]) {
+  if (!hasSupabaseEnv() || companyIds.length === 0) {
+    return { invitations: [] as WorkspaceInvitationRow[], error: null };
+  }
+  const supabase = await createSupabaseServerClient();
+  const { data, error } = await supabase
+    .from("company_invitations")
+    .select("id, company_id, invited_email, invited_user_id, role, token_hash, status, expires_at, invited_by, accepted_by, accepted_at, revoked_by, revoked_at, resent_at, delivery_events, created_at, updated_at")
+    .in("company_id", companyIds)
+    .order("updated_at", { ascending: false });
+
+  return {
+    invitations: (data ?? []) as WorkspaceInvitationRow[],
+    error: error?.message ?? null,
+  };
+}
+
+export async function listNotificationOutbox(companyIds: string[]) {
+  if (!hasSupabaseEnv() || companyIds.length === 0) {
+    return { notifications: [] as NotificationOutboxRow[], error: null };
+  }
+  const supabase = await createSupabaseServerClient();
+  const { data, error } = await supabase
+    .from("notification_outbox")
+    .select("id, company_id, recipient_email, template, payload, status, created_by, created_at")
+    .in("company_id", companyIds)
+    .order("created_at", { ascending: false });
+
+  return {
+    notifications: (data ?? []) as NotificationOutboxRow[],
     error: error?.message ?? null,
   };
 }

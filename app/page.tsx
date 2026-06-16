@@ -3,6 +3,7 @@ import {
   activateBillingSubscription,
   addFilingOverride,
   addFilingReviewComment,
+  acceptWorkspaceInvitation,
   confirmAuthorityPermission,
   confirmSimulatedRf1086Submission,
   createOpeningBalanceSetup,
@@ -22,7 +23,9 @@ import {
   recordShareholderLoan,
   recordTaxSettlement,
   refreshAnnualReadinessSnapshots,
+  resendWorkspaceInvitation,
   requestFilingPackagePayment,
+  revokeWorkspaceInvitation,
   saveYearEndInterview,
   saveBillingAccount,
   signIn,
@@ -38,6 +41,7 @@ import {
 } from "./lib/authority-permission";
 import { buildDeadlineDashboard, deadlineStatusLabel } from "./lib/deadlines";
 import { summarizeDividendReceivedAnnualImpact } from "./lib/dividend-received";
+import { invitationStatus, reviewChecklistStatus } from "./lib/invitations";
 import { estimateAnnualTax } from "./lib/tax-settlement";
 import {
   getCurrentUser,
@@ -56,8 +60,10 @@ import {
   listHoldingActions,
   listInvestmentPositions,
   listLedgerEntries,
+  listNotificationOutbox,
   listOpeningSetups,
   listPeriodLocks,
+  listWorkspaceInvitations,
 } from "./lib/supabase/server";
 
 type HomeProps = {
@@ -92,6 +98,8 @@ export default async function Home({ searchParams }: HomeProps) {
   const { readinessSnapshots } = user ? await listFilingReadinessSnapshots(companies.map((company) => company.id)) : { readinessSnapshots: [] };
   const { comments } = user ? await listFilingReviewComments(companies.map((company) => company.id)) : { comments: [] };
   const { authorityPermissions } = user ? await listAuthorityPermissions(companies.map((company) => company.id)) : { authorityPermissions: [] };
+  const { invitations } = user ? await listWorkspaceInvitations(companies.map((company) => company.id)) : { invitations: [] };
+  const { notifications } = user ? await listNotificationOutbox(companies.map((company) => company.id)) : { notifications: [] };
   const { billingAccounts } = user ? await listBillingAccounts(companies.map((company) => company.id)) : { billingAccounts: [] };
   const { transactions } = user ? await listBankTransactions(companies.map((company) => company.id)) : { transactions: [] };
   const { actions } = user ? await listHoldingActions(companies.map((company) => company.id)) : { actions: [] };
@@ -140,6 +148,13 @@ export default async function Home({ searchParams }: HomeProps) {
   );
   const primaryBillingGate = primaryBillingAccount ? productionBillingGate(primaryBillingAccount, primaryFilingReady) : null;
   const primaryAuthorityPermissions = authorityPermissions.filter((permission) => permission.company_id === primaryCompanyId);
+  const primaryInvitations = invitations.filter((invitation) => invitation.company_id === primaryCompanyId);
+  const primaryNotifications = notifications.filter((notification) => notification.company_id === primaryCompanyId);
+  const reviewChecklist = reviewChecklistStatus(
+    comments
+      .filter((comment) => comment.company_id === primaryCompanyId)
+      .map((comment) => ({ severity: comment.severity, acknowledged_by: comment.acknowledged_by })),
+  );
   const deadlines = incomeYears.flatMap((incomeYear) => buildDeadlineDashboard({ incomeYear, submissions }));
 
   return (
@@ -416,8 +431,8 @@ export default async function Home({ searchParams }: HomeProps) {
                   <input name="companyId" type="hidden" value={primaryCompanyId} />
                   <span className="panelLabel">Inviter reviewer</span>
                   <label>
-                    Bruker-ID
-                    <input name="userId" placeholder="Supabase auth user id" required />
+                    E-post
+                    <input name="email" type="email" placeholder="reviewer@example.no" required />
                   </label>
                   <label>
                     Rolle
@@ -427,9 +442,66 @@ export default async function Home({ searchParams }: HomeProps) {
                     </select>
                   </label>
                   <button className="secondaryButton" type="submit">
-                    Legg til tilgang
+                    Send invitasjon
+                  </button>
+                  <p>Krever fersk MFA/step-up. E-post legges i notification outbox.</p>
+                </form>
+                <form className="dataPanel formPanel widePanel" action={acceptWorkspaceInvitation}>
+                  <span className="panelLabel">Godta invitasjon</span>
+                  <label>
+                    Invitasjonstoken
+                    <input name="token" placeholder="Token fra e-postlenke" required />
+                  </label>
+                  <button className="secondaryButton" type="submit">
+                    Godta tilgang
                   </button>
                 </form>
+                <div className="readinessGrid">
+                  <div className="readinessItem">
+                    <span>Review checklist</span>
+                    <strong data-status={reviewChecklist.readinessImpact === "hard_block" ? "blocked" : "advisory"}>
+                      {reviewChecklist.readinessImpact === "hard_block" ? "Hard block" : "Advisory"}
+                    </strong>
+                    <p>{reviewChecklist.advisoryCount} advisory kommentarer, {reviewChecklist.acknowledgedAdvisoryCount} acknowledged.</p>
+                    <p>{reviewChecklist.hardBlockCount} hard blocks må løses av systemregel eller ny kommentarstatus.</p>
+                  </div>
+                  <div className="readinessItem">
+                    <span>Notification outbox</span>
+                    <strong data-status={primaryNotifications.length ? "ready" : "draft"}>
+                      {primaryNotifications.length} køet
+                    </strong>
+                    <p>Siste: {primaryNotifications[0]?.recipient_email ?? "Ingen invitasjonsmail køet."}</p>
+                  </div>
+                </div>
+                <div className="readinessGrid">
+                  {primaryInvitations.map((invitation) => {
+                    const status = invitationStatus(invitation);
+                    return (
+                      <div className="readinessItem" key={invitation.id}>
+                        <span>{invitation.role}</span>
+                        <strong data-status={status === "pending" ? "warning" : status === "accepted" ? "ready" : "blocked"}>
+                          {status}
+                        </strong>
+                        <p>{invitation.invited_email}</p>
+                        <p>Utløper {new Date(invitation.expires_at).toLocaleDateString("nb-NO")}</p>
+                        {status === "pending" ? (
+                          <div className="inlineActions">
+                            <form action={resendWorkspaceInvitation}>
+                              <input name="companyId" type="hidden" value={primaryCompanyId} />
+                              <input name="invitationId" type="hidden" value={invitation.id} />
+                              <button className="secondaryButton" type="submit">Send på nytt</button>
+                            </form>
+                            <form action={revokeWorkspaceInvitation}>
+                              <input name="companyId" type="hidden" value={primaryCompanyId} />
+                              <input name="invitationId" type="hidden" value={invitation.id} />
+                              <button className="secondaryButton" type="submit">Tilbakekall</button>
+                            </form>
+                          </div>
+                        ) : null}
+                      </div>
+                    );
+                  })}
+                </div>
                 <div className="readinessGrid">
                   {previews.map((preview) => {
                     const previewOverrides = overrides.filter(
