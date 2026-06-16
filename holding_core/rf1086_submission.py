@@ -50,7 +50,11 @@ def prepare_rf1086_submission(
         return mark_blocked_failure(
             submission,
             code="RF1086_CODE_UNVERIFIED",
-            message=f"Unverified RF-1086 code values block production filing: {blocked}",
+            message=(
+                "Produksjonsinnsending er utilgjengelig fordi offisiell RF-1086-kodeevidens "
+                f"ikke er bekreftet for: {blocked}. Talli kan bare simulere til Skatteetaten "
+                "har bekreftet kodene i dokumentasjon, kodeliste eller testmiljø."
+            ),
         )
 
     if mode == Rf1086SubmissionMode.PRODUCTION:

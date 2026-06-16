@@ -78,12 +78,14 @@ Every failure must preserve the submission state and be visible to the user/oper
 
 As of 2026-06-14:
 
-- `N` for stiftelse is observed in Skatteetaten public API example and has no local production blocker.
-- `K` for kjøp remains a production blocker.
-- `S` for salg remains a production blocker.
-- `U` for utbytte remains a production blocker.
+- `N` for stiftelse has evidence status `verified`; it is observed in Skatteetaten public API example and has no local RF-1086 code-value blocker.
+- `K` for kjøp has evidence status `still_blocked`.
+- `S` for salg has evidence status `still_blocked`.
+- `U` for utbytte has evidence status `still_blocked`.
 
 The public examples identify labels and reporting positions, but the public XSDs do not prove these exact code values. The blocker can be cleared only by official docs/code list or Skatteetaten test-environment acceptance recorded in the code-decision registry and filing docs.
+
+User-facing blocker text must explain that production submission is unavailable until official RF-1086 code evidence is confirmed.
 
 ## Human Review Before Live Filing
 

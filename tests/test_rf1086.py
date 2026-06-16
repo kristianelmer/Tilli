@@ -11,6 +11,7 @@ from holding_core.models import FilingCase
 from holding_core.rf1086 import filing_preview, generate_rf1086, readiness_report, write_rf1086
 from holding_core.rf1086_codes import (
     ACQUISITION_PURCHASE_CODE,
+    CodeVerificationStatus,
     DISPOSAL_SALE_CODE,
     DIVIDEND_DISTRIBUTION_CODE,
     FORMATION_STIFTELSE_CODE,
@@ -238,10 +239,14 @@ class Rf1086SimulationTest(unittest.TestCase):
         blockers = {decision.event for decision in production_code_blockers()}
 
         self.assertEqual(decisions["stiftelse"].code_value, FORMATION_STIFTELSE_CODE)
+        self.assertEqual(decisions["stiftelse"].verification_status, CodeVerificationStatus.VERIFIED)
         self.assertFalse(decisions["stiftelse"].production_blocker)
         self.assertEqual(decisions["kjop"].code_value, ACQUISITION_PURCHASE_CODE)
+        self.assertEqual(decisions["kjop"].verification_status, CodeVerificationStatus.STILL_BLOCKED)
         self.assertEqual(decisions["salg"].code_value, DISPOSAL_SALE_CODE)
+        self.assertEqual(decisions["salg"].verification_status, CodeVerificationStatus.STILL_BLOCKED)
         self.assertEqual(decisions["utbytte"].code_value, DIVIDEND_DISTRIBUTION_CODE)
+        self.assertEqual(decisions["utbytte"].verification_status, CodeVerificationStatus.STILL_BLOCKED)
         self.assertEqual(blockers, {"kjop", "salg", "utbytte"})
 
     def test_generated_xml_uses_central_transaction_code_registry(self) -> None:

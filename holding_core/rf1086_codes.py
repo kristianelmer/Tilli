@@ -8,8 +8,9 @@ from holding_core.models import DividendEvent, FilingCase, FormationEvent, Share
 
 
 class CodeVerificationStatus(StrEnum):
-    OFFICIAL_API_EXAMPLE = "official_api_example"
-    PUBLIC_LABEL_ONLY = "public_label_only"
+    VERIFIED = "verified"
+    REJECTED = "rejected"
+    STILL_BLOCKED = "still_blocked"
 
 
 class Rf1086CodeDecision(BaseModel):
@@ -36,7 +37,7 @@ RF1086_CODE_DECISIONS: tuple[Rf1086CodeDecision, ...] = (
         field_name="AksjerNyutstedteStiftelseMvType-datadef-17670 / AksjeErvervType-datadef-17745",
         code_value=FORMATION_STIFTELSE_CODE,
         public_label="stiftelse",
-        verification_status=CodeVerificationStatus.OFFICIAL_API_EXAMPLE,
+        verification_status=CodeVerificationStatus.VERIFIED,
         production_blocker=False,
         authority_note="Observed in Skatteetaten's public API example for RF-1086/RF-1086-U.",
         sources=(
@@ -48,7 +49,7 @@ RF1086_CODE_DECISIONS: tuple[Rf1086CodeDecision, ...] = (
         field_name="AksjeErvervType-datadef-17745",
         code_value=ACQUISITION_PURCHASE_CODE,
         public_label="kjøp",
-        verification_status=CodeVerificationStatus.PUBLIC_LABEL_ONLY,
+        verification_status=CodeVerificationStatus.STILL_BLOCKED,
         production_blocker=True,
         authority_note=(
             "Skatteetaten public examples document the purchase label and reporting position, "
@@ -63,7 +64,7 @@ RF1086_CODE_DECISIONS: tuple[Rf1086CodeDecision, ...] = (
         field_name="AksjerArvMvOmsattType-datadef-17753",
         code_value=DISPOSAL_SALE_CODE,
         public_label="salg",
-        verification_status=CodeVerificationStatus.PUBLIC_LABEL_ONLY,
+        verification_status=CodeVerificationStatus.STILL_BLOCKED,
         production_blocker=True,
         authority_note=(
             "Skatteetaten public examples document the sale label and reporting position, "
@@ -78,7 +79,7 @@ RF1086_CODE_DECISIONS: tuple[Rf1086CodeDecision, ...] = (
         field_name="AksjeUtbytteHendelsestype-datadef-36564",
         code_value=DIVIDEND_DISTRIBUTION_CODE,
         public_label="utbytte",
-        verification_status=CodeVerificationStatus.PUBLIC_LABEL_ONLY,
+        verification_status=CodeVerificationStatus.STILL_BLOCKED,
         production_blocker=True,
         authority_note=(
             "Dividend event type is accepted by local XSD shape, but public sources reviewed do not verify "
