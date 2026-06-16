@@ -11,6 +11,7 @@
     "test:annual-readiness": "node --experimental-strip-types --test tests/annual_readiness_gates.test.mjs",
     "test:authority": "node --experimental-strip-types --test tests/authority_permission.test.mjs",
     "test:bank": "node --experimental-strip-types --test tests/bank_workflow.test.mjs",
+    "test:backup-restore": "node --experimental-strip-types --test tests/backup_restore.test.mjs",
     "test:browser-owner": "node tests/browser_owner_annual_loop.mjs",
     "test:billing": "node --experimental-strip-types --test tests/billing_persisted.test.mjs",
     "test:brreg": "node --experimental-strip-types --test tests/brreg.test.mjs",

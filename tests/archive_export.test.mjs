@@ -154,6 +154,31 @@ test("builds company-year archive from persisted workspace rows", () => {
         updated_at: "2026-01-02T00:00:00Z",
       },
     ],
+    reviewComments: [
+      {
+        id: "review-id",
+        preview_id: "preview-id",
+        company_id: "company-id",
+        target: "rf1086_preview",
+        severity: "advisory",
+        body: "Kontroller note.",
+        created_by: "reviewer",
+        acknowledged_by: "owner",
+        acknowledged_at: "2026-01-01T00:00:00Z",
+        created_at: "2026-01-01T00:00:00Z",
+      },
+    ],
+    auditEvents: [
+      {
+        id: "audit-id",
+        company_id: "company-id",
+        actor_id: "owner",
+        category: "filing",
+        action: "rf1086_simulated_receipt_archived",
+        message: "Kvittering arkivert.",
+        created_at: "2026-01-01T00:00:00Z",
+      },
+    ],
     filingPreviews: [
       {
         id: "preview-id",
@@ -242,4 +267,6 @@ test("builds company-year archive from persisted workspace rows", () => {
   assert.equal(archive.taxSettlementLedgerEntries[0].entry_type, "tax_settlement");
   assert.equal(archive.billingAccounts[0].pricing_plan, "founder");
   assert.equal(archive.authorityPermissions[0].obligation, "aksjonaerregisteroppgaven");
+  assert.equal(archive.reviewComments[0].id, "review-id");
+  assert.equal(archive.auditEvents[0].action, "rf1086_simulated_receipt_archived");
 });

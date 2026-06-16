@@ -4,6 +4,7 @@ import type {
   CompanyWorkspaceRow,
   DocumentRow,
   FilingPreviewRow,
+  FilingReviewCommentRow,
   FilingSubmissionRow,
   HoldingActionRow,
   OpeningBalanceSetupRow,
@@ -22,6 +23,16 @@ export type LedgerEntryRow = {
   created_at: string;
 };
 
+export type AuditEventArchiveRow = {
+  id: string;
+  company_id: string;
+  actor_id: string | null;
+  category: string;
+  action: string;
+  message: string;
+  created_at: string;
+};
+
 export function buildPersistedCompanyArchive(input: {
   company: CompanyWorkspaceRow;
   incomeYear: number;
@@ -32,6 +43,8 @@ export function buildPersistedCompanyArchive(input: {
   holdingActions?: HoldingActionRow[];
   billingAccounts?: BillingAccountRow[];
   authorityPermissions?: AuthorityPermissionRow[];
+  auditEvents?: AuditEventArchiveRow[];
+  reviewComments?: FilingReviewCommentRow[];
   filingPreviews: FilingPreviewRow[];
   filingSubmissions: FilingSubmissionRow[];
 }) {
@@ -93,6 +106,8 @@ export function buildPersistedCompanyArchive(input: {
     taxSettlementLedgerEntries: input.ledgerEntries.filter((entry) => taxSettlementLedgerIds.has(entry.id)),
     billingAccounts: input.billingAccounts ?? [],
     authorityPermissions: input.authorityPermissions ?? [],
+    auditEvents: input.auditEvents ?? [],
+    reviewComments: input.reviewComments ?? [],
     documents: input.documents.map((document) => ({
       id: document.id,
       incomeYear: document.income_year,

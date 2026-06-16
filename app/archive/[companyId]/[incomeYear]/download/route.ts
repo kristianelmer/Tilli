@@ -38,6 +38,8 @@ export async function GET(_request: Request, { params }: { params: Promise<Recor
     { data: holdingActions },
     { data: billingAccounts },
     { data: authorityPermissions },
+    { data: reviewComments },
+    { data: auditEvents },
   ] =
     await Promise.all([
       supabase
@@ -73,6 +75,14 @@ export async function GET(_request: Request, { params }: { params: Promise<Recor
         .from("authority_permissions")
         .select("id, company_id, obligation, submitter_user_id, confirmed_by, confirmed_at, production_enabled, updated_at")
         .eq("company_id", companyId),
+      supabase
+        .from("filing_review_comments")
+        .select("id, preview_id, company_id, target, severity, body, created_by, acknowledged_by, acknowledged_at, created_at")
+        .eq("company_id", companyId),
+      supabase
+        .from("audit_events")
+        .select("id, company_id, actor_id, category, action, message, created_at")
+        .eq("company_id", companyId),
     ]);
 
   const setupIds = (setups ?? []).map((setup) => setup.id);
@@ -93,6 +103,8 @@ export async function GET(_request: Request, { params }: { params: Promise<Recor
     holdingActions: holdingActions ?? [],
     billingAccounts: billingAccounts ?? [],
     authorityPermissions: authorityPermissions ?? [],
+    auditEvents: auditEvents ?? [],
+    reviewComments: reviewComments ?? [],
     filingPreviews: previews ?? [],
     filingSubmissions: submissions ?? [],
   });

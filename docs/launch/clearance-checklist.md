@@ -66,6 +66,7 @@ Public launch may proceed only when each item has a named reviewer, date, eviden
 - `talli.no` ownership confirmed.
 - Non-affiliation language present in public copy and terms.
 - Production direct-filing claims removed or backed by completed production gates.
+- Backup/restore launch gate passed within the last 30 days. Required evidence: `npm run test:backup-restore`, a recorded restore target, and no missing launch-critical rows.
 - Pricing copy reviewed against refund/support-boundary policy.
 - Terms, privacy policy, DPA, retention, export, and incident language reviewed.
 - Security baseline sign-off completed.
