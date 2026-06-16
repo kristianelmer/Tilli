@@ -1,5 +1,11 @@
 import { cookies } from "next/headers";
 import { createServerClient } from "@supabase/ssr";
+import type {
+  Rf1086ReceiptMetadata,
+  Rf1086SubmissionFeedbackItem,
+  Rf1086SubmittedPayloadReference,
+  Rf1086SubmittedPayloadSnapshot,
+} from "../rf1086-submission";
 
 export type CompanyWorkspaceRow = {
   id: string;
@@ -99,6 +105,10 @@ export type FilingSubmissionRow = {
   calls: { endpoint: string; body_hash: string; idempotency_key: string; status: string; created_at: string }[];
   receipt_id: string | null;
   feedback_document_ids: string[];
+  feedback_items: Rf1086SubmissionFeedbackItem[];
+  receipt_metadata: Rf1086ReceiptMetadata | null;
+  submitted_payload_ref: Rf1086SubmittedPayloadReference | null;
+  submitted_payload: Rf1086SubmittedPayloadSnapshot | null;
   authority_confirmed_at: string | null;
   preview_confirmed_at: string | null;
   created_at: string;
@@ -364,7 +374,7 @@ export async function listFilingSubmissions(companyIds: string[]) {
   const supabase = await createSupabaseServerClient();
   const { data, error } = await supabase
     .from("filing_submissions")
-    .select("id, preview_id, company_id, income_year, filing, mode, adapter_mode, payload_hash, idempotency_key, status, calls, receipt_id, feedback_document_ids, authority_confirmed_at, preview_confirmed_at, created_at, updated_at, submitted_by")
+    .select("id, preview_id, company_id, income_year, filing, mode, adapter_mode, payload_hash, idempotency_key, status, calls, receipt_id, feedback_document_ids, feedback_items, receipt_metadata, submitted_payload_ref, submitted_payload, authority_confirmed_at, preview_confirmed_at, created_at, updated_at, submitted_by")
     .in("company_id", companyIds)
     .order("updated_at", { ascending: false });
 

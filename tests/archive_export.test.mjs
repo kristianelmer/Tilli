@@ -185,6 +185,37 @@ test("builds company-year archive from persisted workspace rows", () => {
         calls: [{ endpoint: "/api/aksjonaerregister/v1/2025/1086H", body_hash: "hash", idempotency_key: "key", status: "prepared", created_at: "2026-01-01T00:00:00Z" }],
         receipt_id: "sim-rf1086-company-id-2025-preview",
         feedback_document_ids: ["sim-feedback-preview"],
+        feedback_items: [
+          {
+            severity: "accepted",
+            code: "RF1086_ACCEPTED",
+            message: "Akseptert",
+            documentId: "sim-feedback-preview",
+          },
+        ],
+        receipt_metadata: {
+          authority: "simulation",
+          receiptId: "sim-rf1086-company-id-2025-preview",
+          status: "receipt_stored",
+          receivedAt: "2026-01-01T00:00:00Z",
+          feedbackDocumentIds: ["sim-feedback-preview"],
+        },
+        submitted_payload_ref: {
+          previewId: "preview-id",
+          payloadHash: "payload-hash",
+          hovedskjemaHash: "hoved-hash",
+          underskjemaHashes: { shareholder: "under-hash" },
+          callCount: 1,
+          storedAt: "2026-01-01T00:00:00Z",
+        },
+        submitted_payload: {
+          filing: "aksjonærregisteroppgaven",
+          companyId: "company-id",
+          incomeYear: 2025,
+          payloadHash: "payload-hash",
+          hovedskjemaXml: "<RF-1086 />",
+          underskjemaXml: { shareholder: "<RF-1086U />" },
+        },
         authority_confirmed_at: "2026-01-01T00:00:00Z",
         preview_confirmed_at: "2026-01-01T00:00:00Z",
         submitted_by: "owner",
@@ -203,6 +234,9 @@ test("builds company-year archive from persisted workspace rows", () => {
   assert.equal(archive.filingPreviews[0].hovedskjemaXml, "<RF-1086 />");
   assert.equal(archive.simulatedReceipts[0].receiptId, "sim-rf1086-company-id-2025-preview");
   assert.equal(archive.simulatedReceipts[0].idempotencyKey, "rf1086-company-id-2025");
+  assert.equal(archive.simulatedReceipts[0].receiptMetadata.receiptId, "sim-rf1086-company-id-2025-preview");
+  assert.equal(archive.rf1086Submissions[0].submittedPayload.hovedskjemaXml, "<RF-1086 />");
+  assert.equal(archive.rf1086Submissions[0].feedbackItems[0].code, "RF1086_ACCEPTED");
   assert.equal(archive.taxSettlements[0].ledgerEntryId, "tax-ledger-id");
   assert.equal(archive.taxSettlements[0].document.id, "tax-document-id");
   assert.equal(archive.taxSettlementLedgerEntries[0].entry_type, "tax_settlement");

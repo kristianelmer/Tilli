@@ -37,7 +37,11 @@ import {
 import {
   Rf1086ProductionAdapterDisabledError,
   rf1086PayloadHash,
+  rf1086ReceiptMetadata,
+  rf1086SubmissionFeedbackItems,
   rf1086SubmissionIdempotencyKey,
+  rf1086SubmittedPayloadReference,
+  rf1086SubmittedPayloadSnapshot,
   runRf1086SubmissionAdapter,
 } from "./lib/rf1086-submission";
 import { buildNoActivityRf1086Case, renderRf1086PreviewWithPython } from "./lib/rf1086";
@@ -528,6 +532,10 @@ export async function confirmSimulatedRf1086Submission(formData: FormData) {
       calls: simulated.calls,
       receipt_id: simulated.receipt_id,
       feedback_document_ids: simulated.feedback_document_ids,
+      feedback_items: rf1086SubmissionFeedbackItems(simulated),
+      receipt_metadata: rf1086ReceiptMetadata(simulated),
+      submitted_payload_ref: rf1086SubmittedPayloadReference(preview, simulated),
+      submitted_payload: rf1086SubmittedPayloadSnapshot(preview),
       failure_code: simulated.failure_code,
       failure_message: simulated.failure_message,
       created_by: user.id,

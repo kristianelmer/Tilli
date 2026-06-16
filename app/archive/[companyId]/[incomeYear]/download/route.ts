@@ -20,14 +20,14 @@ export async function GET(_request: Request, { params }: { params: Promise<Recor
 
   const { data: submissions, error: submissionError } = await supabase
     .from("filing_submissions")
-    .select("id, preview_id, company_id, income_year, filing, mode, adapter_mode, payload_hash, idempotency_key, status, calls, receipt_id, feedback_document_ids, authority_confirmed_at, preview_confirmed_at, created_at, updated_at, submitted_by")
+    .select("id, preview_id, company_id, income_year, filing, mode, adapter_mode, payload_hash, idempotency_key, status, calls, receipt_id, feedback_document_ids, feedback_items, receipt_metadata, submitted_payload_ref, submitted_payload, authority_confirmed_at, preview_confirmed_at, created_at, updated_at, submitted_by")
     .eq("company_id", companyId)
     .eq("income_year", incomeYear);
   if (submissionError) {
     return new Response("Could not read filing submissions", { status: 500 });
   }
-  if (!submissions?.some((submission) => submission.receipt_id)) {
-    return new Response("Archive requires simulated receipt first", { status: 409 });
+  if (!submissions?.length) {
+    return new Response("Archive requires RF-1086 submission state first", { status: 409 });
   }
 
   const [

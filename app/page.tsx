@@ -869,6 +869,8 @@ export default async function Home({ searchParams }: HomeProps) {
                       <strong data-status={submission.status}>{submission.receipt_id ?? "Ingen kvittering"}</strong>
                       <p>Kun simulering. Ingen live innsending er gjort.</p>
                       <p>{submission.calls.length} simulerte API-kall forberedt.</p>
+                      <p>{submission.feedback_items.length} strukturerte tilbakemeldinger lagret.</p>
+                      <p>Arkivreferanse: {submission.submitted_payload_ref?.payloadHash.slice(0, 12) ?? "Mangler"}</p>
                       <p>Bekreftet: {submission.preview_confirmed_at ? new Date(submission.preview_confirmed_at).toLocaleString("nb-NO") : "Nei"}</p>
                       <a href={`/archive/${submission.company_id}/${submission.income_year}/download`}>Eksporter arkiv</a>
                     </div>

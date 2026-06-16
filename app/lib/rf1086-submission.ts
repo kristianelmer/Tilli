@@ -33,6 +33,39 @@ export type Rf1086SubmissionResult = {
   failure_message: string | null;
 };
 
+export type Rf1086SubmissionFeedbackItem = {
+  severity: "accepted" | "error" | "warning";
+  code: string;
+  message: string;
+  documentId: string | null;
+};
+
+export type Rf1086ReceiptMetadata = {
+  authority: "simulation" | "skatteetaten";
+  receiptId: string;
+  status: "receipt_stored";
+  receivedAt: string;
+  feedbackDocumentIds: string[];
+};
+
+export type Rf1086SubmittedPayloadReference = {
+  previewId: string;
+  payloadHash: string;
+  hovedskjemaHash: string | null;
+  underskjemaHashes: Record<string, string>;
+  callCount: number;
+  storedAt: string;
+};
+
+export type Rf1086SubmittedPayloadSnapshot = {
+  filing: string;
+  companyId: string;
+  incomeYear: number;
+  payloadHash: string;
+  hovedskjemaXml: string | null;
+  underskjemaXml: Record<string, string>;
+};
+
 export type Rf1086SubmissionConfirmations = {
   authorityConfirmed: boolean;
   previewConfirmed: boolean;
@@ -80,6 +113,69 @@ export function rf1086PayloadHash(preview: FilingPreviewRow) {
 
 export function rf1086SubmissionIdempotencyKey(preview: FilingPreviewRow) {
   return `rf1086:${preview.company_id}:${preview.income_year}:${rf1086PayloadHash(preview).slice(0, 16)}`;
+}
+
+export function rf1086SubmissionFeedbackItems(result: Rf1086SubmissionResult): Rf1086SubmissionFeedbackItem[] {
+  if (result.failure_code || result.failure_message) {
+    return [
+      {
+        severity: result.status === "failed_blocked" || result.status === "failed_retryable" ? "error" : "warning",
+        code: result.failure_code ?? "RF1086_FEEDBACK",
+        message: result.failure_message ?? "RF-1086 innsending har tilbakemelding uten meldingstekst.",
+        documentId: null,
+      },
+    ];
+  }
+  if (result.status === "receipt_stored") {
+    return result.feedback_document_ids.map((documentId) => ({
+      severity: "accepted",
+      code: "RF1086_ACCEPTED",
+      message: "RF-1086 er akseptert i simuleringsadapter og kvittering er lagret.",
+      documentId,
+    }));
+  }
+  return [];
+}
+
+export function rf1086ReceiptMetadata(result: Rf1086SubmissionResult): Rf1086ReceiptMetadata | null {
+  if (result.status !== "receipt_stored" || !result.receipt_id) {
+    return null;
+  }
+  return {
+    authority: "simulation",
+    receiptId: result.receipt_id,
+    status: "receipt_stored",
+    receivedAt: new Date().toISOString(),
+    feedbackDocumentIds: result.feedback_document_ids,
+  };
+}
+
+export function rf1086SubmittedPayloadReference(
+  preview: FilingPreviewRow,
+  result: Rf1086SubmissionResult,
+): Rf1086SubmittedPayloadReference {
+  const hashXml = (xml: string | null) => (xml ? createHash("sha256").update(xml).digest("hex") : null);
+  return {
+    previewId: preview.id,
+    payloadHash: rf1086PayloadHash(preview),
+    hovedskjemaHash: hashXml(preview.hovedskjema_xml),
+    underskjemaHashes: Object.fromEntries(
+      Object.entries(preview.underskjema_xml).map(([key, xml]) => [key, createHash("sha256").update(xml).digest("hex")]),
+    ),
+    callCount: result.calls.length,
+    storedAt: new Date().toISOString(),
+  };
+}
+
+export function rf1086SubmittedPayloadSnapshot(preview: FilingPreviewRow): Rf1086SubmittedPayloadSnapshot {
+  return {
+    filing: preview.filing,
+    companyId: preview.company_id,
+    incomeYear: preview.income_year,
+    payloadHash: rf1086PayloadHash(preview),
+    hovedskjemaXml: preview.hovedskjema_xml,
+    underskjemaXml: preview.underskjema_xml,
+  };
 }
 
 export function productionRf1086AdapterEnabled() {

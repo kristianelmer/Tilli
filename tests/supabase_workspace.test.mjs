@@ -29,7 +29,11 @@ import { buildNoActivityRf1086Case, renderRf1086PreviewWithPython } from "../app
 import {
   Rf1086ProductionAdapterDisabledError,
   rf1086PayloadHash,
+  rf1086ReceiptMetadata,
+  rf1086SubmissionFeedbackItems,
   rf1086SubmissionIdempotencyKey,
+  rf1086SubmittedPayloadReference,
+  rf1086SubmittedPayloadSnapshot,
   runRf1086SubmissionAdapter,
 } from "../app/lib/rf1086-submission.ts";
 import { assertAdvisoryCanBeAcknowledged, assertNoHardReviewBlocks } from "../app/lib/review.ts";
@@ -628,6 +632,10 @@ test(
     assert.equal(simulatedSubmission.status, "receipt_stored");
     const submissionPayloadHash = rf1086PayloadHash(filingPreview);
     const submissionIdempotencyKey = rf1086SubmissionIdempotencyKey(filingPreview);
+    const submissionFeedbackItems = rf1086SubmissionFeedbackItems(simulatedSubmission);
+    const submissionReceiptMetadata = rf1086ReceiptMetadata(simulatedSubmission);
+    const submittedPayloadRef = rf1086SubmittedPayloadReference(filingPreview, simulatedSubmission);
+    const submittedPayload = rf1086SubmittedPayloadSnapshot(filingPreview);
     const { data: filingSubmission, error: filingSubmissionError } = await owner
       .from("filing_submissions")
       .upsert(
@@ -649,6 +657,10 @@ test(
           calls: simulatedSubmission.calls,
           receipt_id: simulatedSubmission.receipt_id,
           feedback_document_ids: simulatedSubmission.feedback_document_ids,
+          feedback_items: submissionFeedbackItems,
+          receipt_metadata: submissionReceiptMetadata,
+          submitted_payload_ref: submittedPayloadRef,
+          submitted_payload: submittedPayload,
           failure_code: simulatedSubmission.failure_code,
           failure_message: simulatedSubmission.failure_message,
           created_by: ownerUser.id,
@@ -656,7 +668,7 @@ test(
         },
         { onConflict: "preview_id" },
       )
-      .select("id, preview_id, company_id, income_year, filing, mode, adapter_mode, payload_hash, idempotency_key, status, calls, receipt_id, feedback_document_ids, authority_confirmed_at, preview_confirmed_at, created_at, updated_at, submitted_by")
+      .select("id, preview_id, company_id, income_year, filing, mode, adapter_mode, payload_hash, idempotency_key, status, calls, receipt_id, feedback_document_ids, feedback_items, receipt_metadata, submitted_payload_ref, submitted_payload, authority_confirmed_at, preview_confirmed_at, created_at, updated_at, submitted_by")
       .single();
     assert.ifError(filingSubmissionError);
     assert.equal(filingSubmission.status, "receipt_stored");
@@ -664,6 +676,10 @@ test(
     assert.equal(filingSubmission.payload_hash, submissionPayloadHash);
     assert.equal(filingSubmission.idempotency_key, submissionIdempotencyKey);
     assert.equal(filingSubmission.submitted_by, ownerUser.id);
+    assert.equal(filingSubmission.feedback_items[0].severity, "accepted");
+    assert.equal(filingSubmission.receipt_metadata.receiptId, simulatedSubmission.receipt_id);
+    assert.equal(filingSubmission.submitted_payload_ref.payloadHash, submissionPayloadHash);
+    assert.equal(filingSubmission.submitted_payload.hovedskjemaXml, filingPreview.hovedskjema_xml);
 
     const retrySubmission = runRf1086SubmissionAdapter({
       mode: "simulation",
@@ -693,6 +709,10 @@ test(
         calls: retrySubmission.calls,
         receipt_id: retrySubmission.receipt_id,
         feedback_document_ids: retrySubmission.feedback_document_ids,
+        feedback_items: rf1086SubmissionFeedbackItems(retrySubmission),
+        receipt_metadata: rf1086ReceiptMetadata(retrySubmission),
+        submitted_payload_ref: rf1086SubmittedPayloadReference(filingPreview, retrySubmission),
+        submitted_payload: submittedPayload,
         failure_code: retrySubmission.failure_code,
         failure_message: retrySubmission.failure_message,
         created_by: ownerUser.id,
@@ -708,12 +728,15 @@ test(
 
     const { data: reloadedSubmissions, error: reloadSubmissionError } = await owner
       .from("filing_submissions")
-      .select("id, receipt_id, idempotency_key")
+      .select("id, receipt_id, idempotency_key, feedback_items, receipt_metadata, submitted_payload_ref")
       .eq("preview_id", filingPreview.id);
     assert.ifError(reloadSubmissionError);
     assert.equal(reloadedSubmissions.length, 1);
     assert.equal(reloadedSubmissions[0].receipt_id, simulatedSubmission.receipt_id);
     assert.equal(reloadedSubmissions[0].idempotency_key, submissionIdempotencyKey);
+    assert.equal(reloadedSubmissions[0].feedback_items[0].code, "RF1086_ACCEPTED");
+    assert.equal(reloadedSubmissions[0].receipt_metadata.receiptId, simulatedSubmission.receipt_id);
+    assert.equal(reloadedSubmissions[0].submitted_payload_ref.payloadHash, submissionPayloadHash);
 
     const blockingOverride = validateFilingOverride({
       fieldTarget: "rf1086.transaction_code",
@@ -1910,6 +1933,10 @@ test(
     assert.equal(archive.documents.find((document) => document.id === documentId).storageKey, storageKey);
     assert.equal(archive.readinessReports[0].status, "ready");
     assert.equal(archive.simulatedReceipts[0].receiptId, filingSubmission.receipt_id);
+    assert.equal(archive.simulatedReceipts[0].receiptMetadata.receiptId, filingSubmission.receipt_id);
+    assert.equal(archive.rf1086Submissions[0].feedbackItems[0].code, "RF1086_ACCEPTED");
+    assert.equal(archive.rf1086Submissions[0].submittedPayloadReference.payloadHash, filingSubmission.payload_hash);
+    assert.equal(archive.rf1086Submissions[0].submittedPayload.hovedskjemaXml, filingPreview.hovedskjema_xml);
     assert.equal(archive.taxSettlements[0].ledgerEntryId, taxEntry.id);
     assert.equal(archive.taxSettlements[0].documentId, taxDocumentId);
     assert.equal(archive.taxSettlements[0].document.id, taxDocumentId);

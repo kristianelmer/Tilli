@@ -223,6 +223,10 @@ create table if not exists public.filing_submissions (
   calls jsonb not null default '[]'::jsonb,
   receipt_id text,
   feedback_document_ids jsonb not null default '[]'::jsonb,
+  feedback_items jsonb not null default '[]'::jsonb,
+  receipt_metadata jsonb,
+  submitted_payload_ref jsonb,
+  submitted_payload jsonb,
   failure_code text,
   failure_message text,
   created_by uuid not null references auth.users(id) on delete restrict,
@@ -235,6 +239,10 @@ alter table public.filing_submissions add column if not exists adapter_mode text
 alter table public.filing_submissions add column if not exists payload_hash text;
 alter table public.filing_submissions add column if not exists idempotency_key text;
 alter table public.filing_submissions add column if not exists submitted_by uuid references auth.users(id) on delete restrict;
+alter table public.filing_submissions add column if not exists feedback_items jsonb not null default '[]'::jsonb;
+alter table public.filing_submissions add column if not exists receipt_metadata jsonb;
+alter table public.filing_submissions add column if not exists submitted_payload_ref jsonb;
+alter table public.filing_submissions add column if not exists submitted_payload jsonb;
 
 create table if not exists public.filing_overrides (
   id uuid primary key default gen_random_uuid(),

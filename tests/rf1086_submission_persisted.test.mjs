@@ -6,7 +6,11 @@ import {
   Rf1086ProductionAdapterDisabledError,
   assertRf1086SimulationConfirmations,
   rf1086PayloadHash,
+  rf1086ReceiptMetadata,
+  rf1086SubmissionFeedbackItems,
   rf1086SubmissionIdempotencyKey,
+  rf1086SubmittedPayloadReference,
+  rf1086SubmittedPayloadSnapshot,
   runRf1086SubmissionAdapter,
   simulateRf1086SubmissionWithPython,
 } from "../app/lib/rf1086-submission.ts";
@@ -123,4 +127,45 @@ test("builds stable request payload hash and idempotency key", () => {
   assert.equal(rf1086PayloadHash(preview), rf1086PayloadHash(readyPreview()));
   assert.equal(rf1086SubmissionIdempotencyKey(preview), rf1086SubmissionIdempotencyKey(readyPreview()));
   assert.match(rf1086SubmissionIdempotencyKey(preview), /^rf1086:company-id:2025:/);
+});
+
+test("builds accepted receipt metadata and immutable submitted payload references", () => {
+  const preview = readyPreview();
+  const result = simulateRf1086SubmissionWithPython(preview, "owner-user", {
+    authorityConfirmed: true,
+    previewConfirmed: true,
+  });
+
+  assert.equal(rf1086SubmissionFeedbackItems(result)[0].severity, "accepted");
+  assert.equal(rf1086ReceiptMetadata(result).receiptId, result.receipt_id);
+  assert.equal(rf1086SubmittedPayloadReference(preview, result).payloadHash, rf1086PayloadHash(preview));
+  assert.equal(rf1086SubmittedPayloadReference(preview, result).callCount, 4);
+  assert.equal(rf1086SubmittedPayloadSnapshot(preview).hovedskjemaXml, preview.hovedskjema_xml);
+});
+
+test("builds rejected feedback as structured error state", () => {
+  const feedback = rf1086SubmissionFeedbackItems({
+    filing: "aksjonærregisteroppgaven",
+    company_id: company.id,
+    income_year: setup.income_year,
+    status: "failed_blocked",
+    authority_confirmed_by: "owner-user",
+    authority_confirmed_at: "2026-01-01T00:00:00Z",
+    preview_confirmed_by: "owner-user",
+    preview_confirmed_at: "2026-01-01T00:00:00Z",
+    calls: [],
+    receipt_id: null,
+    feedback_document_ids: [],
+    failure_code: "RF1086_VALIDATION_BLOCKED",
+    failure_message: "Mangler aksjonær.",
+  });
+
+  assert.deepEqual(feedback, [
+    {
+      severity: "error",
+      code: "RF1086_VALIDATION_BLOCKED",
+      message: "Mangler aksjonær.",
+      documentId: null,
+    },
+  ]);
 });
