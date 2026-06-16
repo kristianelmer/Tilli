@@ -200,6 +200,9 @@ create table if not exists public.filing_submissions (
   income_year integer not null check (income_year between 2000 and 2100),
   filing text not null,
   mode text not null default 'simulation' check (mode = 'simulation'),
+  adapter_mode text not null default 'simulation' check (adapter_mode in ('simulation', 'production')),
+  payload_hash text,
+  idempotency_key text,
   status text not null check (
     status in (
       'ready',
@@ -223,9 +226,15 @@ create table if not exists public.filing_submissions (
   failure_code text,
   failure_message text,
   created_by uuid not null references auth.users(id) on delete restrict,
+  submitted_by uuid references auth.users(id) on delete restrict,
   created_at timestamptz not null default now(),
   updated_at timestamptz not null default now()
 );
+
+alter table public.filing_submissions add column if not exists adapter_mode text not null default 'simulation';
+alter table public.filing_submissions add column if not exists payload_hash text;
+alter table public.filing_submissions add column if not exists idempotency_key text;
+alter table public.filing_submissions add column if not exists submitted_by uuid references auth.users(id) on delete restrict;
 
 create table if not exists public.filing_overrides (
   id uuid primary key default gen_random_uuid(),

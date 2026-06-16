@@ -92,6 +92,9 @@ export type FilingSubmissionRow = {
   income_year: number;
   filing: string;
   mode: "simulation";
+  adapter_mode: "simulation" | "production";
+  payload_hash: string | null;
+  idempotency_key: string | null;
   status: string;
   calls: { endpoint: string; body_hash: string; idempotency_key: string; status: string; created_at: string }[];
   receipt_id: string | null;
@@ -100,6 +103,7 @@ export type FilingSubmissionRow = {
   preview_confirmed_at: string | null;
   created_at: string;
   updated_at: string;
+  submitted_by: string | null;
 };
 
 export type FilingOverrideRow = {
@@ -360,7 +364,7 @@ export async function listFilingSubmissions(companyIds: string[]) {
   const supabase = await createSupabaseServerClient();
   const { data, error } = await supabase
     .from("filing_submissions")
-    .select("id, preview_id, company_id, income_year, filing, mode, status, calls, receipt_id, feedback_document_ids, authority_confirmed_at, preview_confirmed_at, created_at, updated_at")
+    .select("id, preview_id, company_id, income_year, filing, mode, adapter_mode, payload_hash, idempotency_key, status, calls, receipt_id, feedback_document_ids, authority_confirmed_at, preview_confirmed_at, created_at, updated_at, submitted_by")
     .in("company_id", companyIds)
     .order("updated_at", { ascending: false });
 

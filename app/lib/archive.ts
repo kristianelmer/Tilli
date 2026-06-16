@@ -45,7 +45,11 @@ export function buildPersistedCompanyArchive(input: {
     .map((submission) => ({
       filing: submission.filing,
       mode: submission.mode,
+      adapterMode: submission.adapter_mode,
       status: submission.status,
+      payloadHash: submission.payload_hash,
+      idempotencyKey: submission.idempotency_key,
+      submittedBy: submission.submitted_by,
       receiptId: submission.receipt_id,
       feedbackDocumentIds: submission.feedback_document_ids,
       calls: submission.calls.map((call) => ({

@@ -34,7 +34,12 @@ import {
   ownerDividendLedgerLines,
   validateOwnerDividend,
 } from "./lib/owner-dividend";
-import { simulateRf1086SubmissionWithPython } from "./lib/rf1086-submission";
+import {
+  Rf1086ProductionAdapterDisabledError,
+  rf1086PayloadHash,
+  rf1086SubmissionIdempotencyKey,
+  runRf1086SubmissionAdapter,
+} from "./lib/rf1086-submission";
 import { buildNoActivityRf1086Case, renderRf1086PreviewWithPython } from "./lib/rf1086";
 import { assertAdvisoryCanBeAcknowledged, assertNoHardReviewBlocks } from "./lib/review";
 import { SharePurchaseValidationError, sharePurchaseLedgerLines, validateSharePurchase } from "./lib/share-purchase";
@@ -485,12 +490,23 @@ export async function confirmSimulatedRf1086Submission(formData: FormData) {
 
   let simulated;
   try {
-    simulated = simulateRf1086SubmissionWithPython(preview, user.id, {
-      authorityConfirmed: formData.get("authorityConfirmed") === "on",
-      previewConfirmed: formData.get("previewConfirmed") === "on",
+    simulated = runRf1086SubmissionAdapter({
+      mode: "simulation",
+      preview,
+      userId: user.id,
+      confirmations: {
+        authorityConfirmed: formData.get("authorityConfirmed") === "on",
+        previewConfirmed: formData.get("previewConfirmed") === "on",
+      },
     });
   } catch (error) {
-    redirect(`/?error=${encodeURIComponent(error instanceof Error ? error.message : "Simulert innsending feilet")}`);
+    const message =
+      error instanceof Rf1086ProductionAdapterDisabledError
+        ? `${error.code}: ${error.message}`
+        : error instanceof Error
+          ? error.message
+          : "Simulert innsending feilet";
+    redirect(`/?error=${encodeURIComponent(message)}`);
   }
 
   const { error: upsertError } = await supabase.from("filing_submissions").upsert(
@@ -501,6 +517,9 @@ export async function confirmSimulatedRf1086Submission(formData: FormData) {
       income_year: preview.income_year,
       filing: preview.filing,
       mode: "simulation",
+      adapter_mode: "simulation",
+      payload_hash: rf1086PayloadHash(preview),
+      idempotency_key: rf1086SubmissionIdempotencyKey(preview),
       status: simulated.status,
       authority_confirmed_by: simulated.authority_confirmed_by,
       authority_confirmed_at: simulated.authority_confirmed_at,
@@ -512,6 +531,7 @@ export async function confirmSimulatedRf1086Submission(formData: FormData) {
       failure_code: simulated.failure_code,
       failure_message: simulated.failure_message,
       created_by: user.id,
+      submitted_by: user.id,
       updated_at: new Date().toISOString(),
     },
     { onConflict: "preview_id" },

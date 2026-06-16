@@ -26,7 +26,12 @@ import {
   validateOwnerDividend,
 } from "../app/lib/owner-dividend.ts";
 import { buildNoActivityRf1086Case, renderRf1086PreviewWithPython } from "../app/lib/rf1086.ts";
-import { simulateRf1086SubmissionWithPython } from "../app/lib/rf1086-submission.ts";
+import {
+  Rf1086ProductionAdapterDisabledError,
+  rf1086PayloadHash,
+  rf1086SubmissionIdempotencyKey,
+  runRf1086SubmissionAdapter,
+} from "../app/lib/rf1086-submission.ts";
 import { assertAdvisoryCanBeAcknowledged, assertNoHardReviewBlocks } from "../app/lib/review.ts";
 import { sharePurchaseLedgerLines, validateSharePurchase } from "../app/lib/share-purchase.ts";
 import { shareSaleLedgerLines, validateShareSale } from "../app/lib/share-sale.ts";
@@ -601,11 +606,28 @@ test(
     assert.ok(readOnlyOverrideError);
     assertNoBlockingFilingOverrides([persistedAdvisoryOverride]);
 
-    const simulatedSubmission = simulateRf1086SubmissionWithPython(filingPreview, ownerUser.id, {
-      authorityConfirmed: true,
-      previewConfirmed: true,
+    assert.throws(
+      () =>
+        runRf1086SubmissionAdapter({
+          mode: "production",
+          preview: filingPreview,
+          userId: ownerUser.id,
+          confirmations: { authorityConfirmed: true, previewConfirmed: true },
+        }),
+      (error) => error instanceof Rf1086ProductionAdapterDisabledError,
+    );
+    const simulatedSubmission = runRf1086SubmissionAdapter({
+      mode: "simulation",
+      preview: filingPreview,
+      userId: ownerUser.id,
+      confirmations: {
+        authorityConfirmed: true,
+        previewConfirmed: true,
+      },
     });
     assert.equal(simulatedSubmission.status, "receipt_stored");
+    const submissionPayloadHash = rf1086PayloadHash(filingPreview);
+    const submissionIdempotencyKey = rf1086SubmissionIdempotencyKey(filingPreview);
     const { data: filingSubmission, error: filingSubmissionError } = await owner
       .from("filing_submissions")
       .upsert(
@@ -616,6 +638,9 @@ test(
           income_year: 2025,
           filing: filingPreview.filing,
           mode: "simulation",
+          adapter_mode: "simulation",
+          payload_hash: submissionPayloadHash,
+          idempotency_key: submissionIdempotencyKey,
           status: simulatedSubmission.status,
           authority_confirmed_by: simulatedSubmission.authority_confirmed_by,
           authority_confirmed_at: simulatedSubmission.authority_confirmed_at,
@@ -627,18 +652,27 @@ test(
           failure_code: simulatedSubmission.failure_code,
           failure_message: simulatedSubmission.failure_message,
           created_by: ownerUser.id,
+          submitted_by: ownerUser.id,
         },
         { onConflict: "preview_id" },
       )
-      .select("id, preview_id, company_id, income_year, filing, mode, status, calls, receipt_id, feedback_document_ids, authority_confirmed_at, preview_confirmed_at, created_at, updated_at")
+      .select("id, preview_id, company_id, income_year, filing, mode, adapter_mode, payload_hash, idempotency_key, status, calls, receipt_id, feedback_document_ids, authority_confirmed_at, preview_confirmed_at, created_at, updated_at, submitted_by")
       .single();
     assert.ifError(filingSubmissionError);
     assert.equal(filingSubmission.status, "receipt_stored");
     assert.equal(filingSubmission.calls.length, 4);
+    assert.equal(filingSubmission.payload_hash, submissionPayloadHash);
+    assert.equal(filingSubmission.idempotency_key, submissionIdempotencyKey);
+    assert.equal(filingSubmission.submitted_by, ownerUser.id);
 
-    const retrySubmission = simulateRf1086SubmissionWithPython(filingPreview, ownerUser.id, {
-      authorityConfirmed: true,
-      previewConfirmed: true,
+    const retrySubmission = runRf1086SubmissionAdapter({
+      mode: "simulation",
+      preview: filingPreview,
+      userId: ownerUser.id,
+      confirmations: {
+        authorityConfirmed: true,
+        previewConfirmed: true,
+      },
     });
     const { error: retryError } = await owner.from("filing_submissions").upsert(
       {
@@ -648,6 +682,9 @@ test(
         income_year: 2025,
         filing: filingPreview.filing,
         mode: "simulation",
+        adapter_mode: "simulation",
+        payload_hash: submissionPayloadHash,
+        idempotency_key: submissionIdempotencyKey,
         status: retrySubmission.status,
         authority_confirmed_by: retrySubmission.authority_confirmed_by,
         authority_confirmed_at: retrySubmission.authority_confirmed_at,
@@ -659,6 +696,7 @@ test(
         failure_code: retrySubmission.failure_code,
         failure_message: retrySubmission.failure_message,
         created_by: ownerUser.id,
+        submitted_by: ownerUser.id,
       },
       { onConflict: "preview_id" },
     );
@@ -670,11 +708,12 @@ test(
 
     const { data: reloadedSubmissions, error: reloadSubmissionError } = await owner
       .from("filing_submissions")
-      .select("id, receipt_id")
+      .select("id, receipt_id, idempotency_key")
       .eq("preview_id", filingPreview.id);
     assert.ifError(reloadSubmissionError);
     assert.equal(reloadedSubmissions.length, 1);
     assert.equal(reloadedSubmissions[0].receipt_id, simulatedSubmission.receipt_id);
+    assert.equal(reloadedSubmissions[0].idempotency_key, submissionIdempotencyKey);
 
     const blockingOverride = validateFilingOverride({
       fieldTarget: "rf1086.transaction_code",

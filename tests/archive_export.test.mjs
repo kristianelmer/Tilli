@@ -178,12 +178,16 @@ test("builds company-year archive from persisted workspace rows", () => {
         income_year: 2025,
         filing: "aksjonærregisteroppgaven",
         mode: "simulation",
+        adapter_mode: "simulation",
+        payload_hash: "payload-hash",
+        idempotency_key: "rf1086-company-id-2025",
         status: "receipt_stored",
         calls: [{ endpoint: "/api/aksjonaerregister/v1/2025/1086H", body_hash: "hash", idempotency_key: "key", status: "prepared", created_at: "2026-01-01T00:00:00Z" }],
         receipt_id: "sim-rf1086-company-id-2025-preview",
         feedback_document_ids: ["sim-feedback-preview"],
         authority_confirmed_at: "2026-01-01T00:00:00Z",
         preview_confirmed_at: "2026-01-01T00:00:00Z",
+        submitted_by: "owner",
         created_at: "2026-01-01T00:00:00Z",
         updated_at: "2026-01-01T00:00:00Z",
       },
@@ -198,6 +202,7 @@ test("builds company-year archive from persisted workspace rows", () => {
   assert.equal(archive.readinessReports[0].status, "ready");
   assert.equal(archive.filingPreviews[0].hovedskjemaXml, "<RF-1086 />");
   assert.equal(archive.simulatedReceipts[0].receiptId, "sim-rf1086-company-id-2025-preview");
+  assert.equal(archive.simulatedReceipts[0].idempotencyKey, "rf1086-company-id-2025");
   assert.equal(archive.taxSettlements[0].ledgerEntryId, "tax-ledger-id");
   assert.equal(archive.taxSettlements[0].document.id, "tax-document-id");
   assert.equal(archive.taxSettlementLedgerEntries[0].entry_type, "tax_settlement");

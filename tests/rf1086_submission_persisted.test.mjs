@@ -3,7 +3,11 @@ import test from "node:test";
 
 import { buildNoActivityRf1086Case, renderRf1086PreviewWithPython } from "../app/lib/rf1086.ts";
 import {
+  Rf1086ProductionAdapterDisabledError,
   assertRf1086SimulationConfirmations,
+  rf1086PayloadHash,
+  rf1086SubmissionIdempotencyKey,
+  runRf1086SubmissionAdapter,
   simulateRf1086SubmissionWithPython,
 } from "../app/lib/rf1086-submission.ts";
 
@@ -98,4 +102,25 @@ test("prepares deterministic simulated submission calls and receipt from persist
     first.calls.map((call) => call.idempotency_key),
   );
   assert.deepEqual(retry.feedback_document_ids, ["sim-feedback-12345678"]);
+});
+
+test("blocks production adapter unless explicit environment gate is enabled", () => {
+  assert.throws(
+    () =>
+      runRf1086SubmissionAdapter({
+        mode: "production",
+        preview: readyPreview(),
+        userId: "owner-user",
+        confirmations: { authorityConfirmed: true, previewConfirmed: true },
+      }),
+    (error) => error instanceof Rf1086ProductionAdapterDisabledError && error.code === "rf1086_production_adapter_disabled",
+  );
+});
+
+test("builds stable request payload hash and idempotency key", () => {
+  const preview = readyPreview();
+
+  assert.equal(rf1086PayloadHash(preview), rf1086PayloadHash(readyPreview()));
+  assert.equal(rf1086SubmissionIdempotencyKey(preview), rf1086SubmissionIdempotencyKey(readyPreview()));
+  assert.match(rf1086SubmissionIdempotencyKey(preview), /^rf1086:company-id:2025:/);
 });
