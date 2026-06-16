@@ -1,6 +1,10 @@
 import { cookies } from "next/headers";
 import { createServerClient } from "@supabase/ssr";
 import type {
+  AnnualReadinessIssue,
+  AnnualReadinessStatus,
+} from "../annual-readiness";
+import type {
   Rf1086ReceiptMetadata,
   Rf1086SubmissionFeedbackItem,
   Rf1086SubmittedPayloadReference,
@@ -131,6 +135,21 @@ export type FilingOverrideRow = {
   owner_confirmed_at: string;
   created_by: string;
   created_at: string;
+};
+
+export type FilingReadinessSnapshotRow = {
+  id: string;
+  company_id: string;
+  income_year: number;
+  obligation: "aksjonaerregisteroppgaven" | "skattemelding" | "aarsregnskap";
+  status: AnnualReadinessStatus;
+  ready: boolean;
+  hard_blocks: AnnualReadinessIssue[];
+  warnings: AnnualReadinessIssue[];
+  accepted_warnings: AnnualReadinessIssue[];
+  evaluated_at: string;
+  created_by: string;
+  updated_at: string;
 };
 
 export type LedgerEntryRow = {
@@ -465,6 +484,23 @@ export async function listLedgerEntries(companyIds: string[]) {
 
   return {
     entries: (data ?? []) as LedgerEntryRow[],
+    error: error?.message ?? null,
+  };
+}
+
+export async function listFilingReadinessSnapshots(companyIds: string[]) {
+  if (!hasSupabaseEnv() || companyIds.length === 0) {
+    return { readinessSnapshots: [] as FilingReadinessSnapshotRow[], error: null };
+  }
+  const supabase = await createSupabaseServerClient();
+  const { data, error } = await supabase
+    .from("filing_readiness_snapshots")
+    .select("id, company_id, income_year, obligation, status, ready, hard_blocks, warnings, accepted_warnings, evaluated_at, created_by, updated_at")
+    .in("company_id", companyIds)
+    .order("updated_at", { ascending: false });
+
+  return {
+    readinessSnapshots: (data ?? []) as FilingReadinessSnapshotRow[],
     error: error?.message ?? null,
   };
 }

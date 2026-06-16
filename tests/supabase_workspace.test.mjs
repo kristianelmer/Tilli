@@ -8,6 +8,7 @@ import { createClient } from "@supabase/supabase-js";
 import pg from "pg";
 
 import { buildPersistedCompanyArchive } from "../app/lib/archive.ts";
+import { evaluateAnnualReadinessGates } from "../app/lib/annual-readiness.ts";
 import { productionAuthorityGate } from "../app/lib/authority-permission.ts";
 import { assertBankTransactionMatchesCost, buildAdminCostLedgerLines, parseBankCsv } from "../app/lib/bank.ts";
 import { buildBillingAccount, productionBillingGate } from "../app/lib/billing.ts";
@@ -325,15 +326,19 @@ test(
     });
     assert.ifError(openingShareholderError);
 
-    const { error: ledgerError } = await owner.from("ledger_entries").insert({
-      company_id: companyId,
-      setup_id: setup.id,
-      income_year: 2025,
-      entry_type: "opening_balance",
-      memo: "Åpningsbalanse for Talli-start",
-      lines: openingBalanceLedgerLines(openingInput),
-      created_by: ownerUser.id,
-    });
+    const { data: openingLedgerEntry, error: ledgerError } = await owner
+      .from("ledger_entries")
+      .insert({
+        company_id: companyId,
+        setup_id: setup.id,
+        income_year: 2025,
+        entry_type: "opening_balance",
+        memo: "Åpningsbalanse for Talli-start",
+        lines: openingBalanceLedgerLines(openingInput),
+        created_by: ownerUser.id,
+      })
+      .select("id, lines")
+      .single();
     assert.ifError(ledgerError);
 
     const { error: openingAuditError } = await owner.from("audit_events").insert({
@@ -421,6 +426,23 @@ test(
       message: "Innsendingsrett bekreftet for aksjonaerregisteroppgaven.",
     });
     assert.ifError(authorityAuditError);
+    const { error: annualAuthorityPermissionError } = await owner.from("authority_permissions").insert([
+      {
+        company_id: companyId,
+        obligation: "skattemelding",
+        submitter_user_id: ownerUser.id,
+        confirmed_by: ownerUser.id,
+        production_enabled: true,
+      },
+      {
+        company_id: companyId,
+        obligation: "aarsregnskap",
+        submitter_user_id: ownerUser.id,
+        confirmed_by: ownerUser.id,
+        production_enabled: true,
+      },
+    ]);
+    assert.ifError(annualAuthorityPermissionError);
     const { error: reviewerAuthorityError } = await reviewer.from("authority_permissions").insert({
       company_id: companyId,
       obligation: "skattemelding",
@@ -504,6 +526,89 @@ test(
       .single();
     assert.ifError(paidBillingError);
     assert.equal(productionBillingGate(paidBilling, true).allowed, true);
+    const { data: annualAuthorityPermissions, error: annualAuthorityPermissionsError } = await owner
+      .from("authority_permissions")
+      .select("company_id, obligation, submitter_user_id, confirmed_by, confirmed_at, production_enabled")
+      .eq("company_id", companyId);
+    assert.ifError(annualAuthorityPermissionsError);
+    const annualReadinessSnapshots = evaluateAnnualReadinessGates({
+      company: persistedCompany,
+      incomeYear: 2025,
+      setups: [setup],
+      ledgerEntries: [
+        {
+          id: openingLedgerEntry.id,
+          company_id: companyId,
+          setup_id: setup.id,
+          income_year: 2025,
+          entry_type: "opening_balance",
+          memo: "Opening balance",
+          lines: openingLedgerEntry.lines,
+          risk_flags: [],
+          warning_accepted_by: null,
+          warning_accepted_at: null,
+          created_by: ownerUser.id,
+          created_at: "2026-01-01T00:00:00Z",
+        },
+      ],
+      holdingActions: [],
+      bankTransactions: [],
+      documents: [],
+      overrides: [],
+      locks: [],
+      billingAccount: paidBilling,
+      authorityPermissions: annualAuthorityPermissions,
+      filingPreviews: [filingPreview],
+      filingSubmissions: [],
+    });
+    const { data: persistedReadinessSnapshots, error: readinessSnapshotError } = await owner
+      .from("filing_readiness_snapshots")
+      .upsert(
+        annualReadinessSnapshots.map((snapshot) => ({
+          company_id: snapshot.company_id,
+          income_year: snapshot.income_year,
+          obligation: snapshot.obligation,
+          status: snapshot.status,
+          ready: snapshot.ready,
+          hard_blocks: snapshot.hard_blocks,
+          warnings: snapshot.warnings,
+          accepted_warnings: snapshot.accepted_warnings,
+          evaluated_at: snapshot.evaluated_at,
+          created_by: ownerUser.id,
+        })),
+        { onConflict: "company_id,income_year,obligation" },
+      )
+      .select("id, company_id, income_year, obligation, status, ready, hard_blocks, warnings, accepted_warnings, evaluated_at, created_by, updated_at");
+    assert.ifError(readinessSnapshotError);
+    assert.equal(persistedReadinessSnapshots.length, 3);
+    assert.equal(persistedReadinessSnapshots.find((snapshot) => snapshot.obligation === "aksjonaerregisteroppgaven").ready, true);
+    assert.ok(persistedReadinessSnapshots.find((snapshot) => snapshot.obligation === "aarsregnskap").warnings.length);
+    assert.equal(productionBillingGate(paidBilling, persistedReadinessSnapshots.find((snapshot) => snapshot.obligation === "aksjonaerregisteroppgaven").ready).allowed, true);
+    const { data: reloadedReadinessSnapshots, error: reloadedReadinessError } = await owner
+      .from("filing_readiness_snapshots")
+      .select("id, obligation, status, ready, hard_blocks, warnings, accepted_warnings")
+      .eq("company_id", companyId)
+      .eq("income_year", 2025);
+    assert.ifError(reloadedReadinessError);
+    assert.equal(reloadedReadinessSnapshots.length, 3);
+    const { error: outsiderReadinessError } = await outsider.from("filing_readiness_snapshots").insert({
+      company_id: companyId,
+      income_year: 2025,
+      obligation: "aarsregnskap",
+      status: "ready",
+      ready: true,
+      hard_blocks: [],
+      warnings: [],
+      accepted_warnings: [],
+      created_by: outsiderUser.id,
+    });
+    assert.ok(outsiderReadinessError);
+    const { data: outsiderReadinessRows, error: outsiderReadinessRowsError } = await outsider
+      .from("filing_readiness_snapshots")
+      .select("id")
+      .eq("company_id", companyId);
+    assert.ifError(outsiderReadinessRowsError);
+    assert.equal(outsiderReadinessRows.length, 0);
     const { error: billingRefundError } = await owner
       .from("billing_accounts")
       .update({ refund_eligible: true, updated_by: ownerUser.id })

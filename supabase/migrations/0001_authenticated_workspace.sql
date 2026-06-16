@@ -262,6 +262,22 @@ create table if not exists public.filing_overrides (
   check (old_value <> '' or new_value <> '')
 );
 
+create table if not exists public.filing_readiness_snapshots (
+  id uuid primary key default gen_random_uuid(),
+  company_id uuid not null references public.companies(id) on delete cascade,
+  income_year integer not null check (income_year between 2000 and 2100),
+  obligation text not null check (obligation in ('aksjonaerregisteroppgaven', 'skattemelding', 'aarsregnskap')),
+  status text not null check (status in ('ready', 'warning', 'blocked')),
+  ready boolean not null,
+  hard_blocks jsonb not null default '[]'::jsonb,
+  warnings jsonb not null default '[]'::jsonb,
+  accepted_warnings jsonb not null default '[]'::jsonb,
+  evaluated_at timestamptz not null default now(),
+  created_by uuid not null references auth.users(id) on delete restrict,
+  updated_at timestamptz not null default now(),
+  unique(company_id, income_year, obligation)
+);
+
 create table if not exists public.filing_review_comments (
   id uuid primary key default gen_random_uuid(),
   preview_id uuid not null references public.filing_previews(id) on delete cascade,
@@ -322,6 +338,7 @@ create index if not exists filing_previews_company_id_year_idx on public.filing_
 create index if not exists filing_submissions_company_id_year_idx on public.filing_submissions(company_id, income_year);
 create index if not exists filing_overrides_company_id_year_idx on public.filing_overrides(company_id, income_year);
 create index if not exists filing_overrides_preview_id_idx on public.filing_overrides(preview_id);
+create index if not exists filing_readiness_snapshots_company_year_idx on public.filing_readiness_snapshots(company_id, income_year);
 create index if not exists filing_review_comments_preview_id_idx on public.filing_review_comments(preview_id, created_at);
 create index if not exists billing_accounts_updated_at_idx on public.billing_accounts(updated_at desc);
 create index if not exists authority_permissions_company_obligation_idx on public.authority_permissions(company_id, obligation);
@@ -340,6 +357,7 @@ alter table public.investment_positions enable row level security;
 alter table public.filing_previews enable row level security;
 alter table public.filing_submissions enable row level security;
 alter table public.filing_overrides enable row level security;
+alter table public.filing_readiness_snapshots enable row level security;
 alter table public.filing_review_comments enable row level security;
 alter table public.billing_accounts enable row level security;
 alter table public.authority_permissions enable row level security;
@@ -359,6 +377,7 @@ grant select, insert, update on public.investment_positions to authenticated;
 grant select, insert on public.filing_previews to authenticated;
 grant select, insert, update on public.filing_submissions to authenticated;
 grant select, insert on public.filing_overrides to authenticated;
+grant select, insert, update on public.filing_readiness_snapshots to authenticated;
 grant select, insert, update on public.filing_review_comments to authenticated;
 grant select, insert, update on public.billing_accounts to authenticated;
 grant select, insert, update on public.authority_permissions to authenticated;
@@ -925,6 +944,58 @@ with check (
         and fp.income_year = filing_overrides.income_year
         and fp.filing = filing_overrides.filing
     )
+  )
+);
+
+drop policy if exists "company members can read filing readiness snapshots" on public.filing_readiness_snapshots;
+create policy "company members can read filing readiness snapshots"
+on public.filing_readiness_snapshots for select
+to authenticated
+using (
+  exists (
+    select 1
+    from public.company_memberships m
+    where m.company_id = filing_readiness_snapshots.company_id
+      and m.user_id = (select auth.uid())
+  )
+);
+
+drop policy if exists "owners can create filing readiness snapshots" on public.filing_readiness_snapshots;
+create policy "owners can create filing readiness snapshots"
+on public.filing_readiness_snapshots for insert
+to authenticated
+with check (
+  created_by = (select auth.uid())
+  and exists (
+    select 1
+    from public.company_memberships m
+    where m.company_id = filing_readiness_snapshots.company_id
+      and m.user_id = (select auth.uid())
+      and m.role = 'owner'
+  )
+);
+
+drop policy if exists "owners can update filing readiness snapshots" on public.filing_readiness_snapshots;
+create policy "owners can update filing readiness snapshots"
+on public.filing_readiness_snapshots for update
+to authenticated
+using (
+  exists (
+    select 1
+    from public.company_memberships m
+    where m.company_id = filing_readiness_snapshots.company_id
+      and m.user_id = (select auth.uid())
+      and m.role = 'owner'
+  )
+)
+with check (
+  created_by = (select auth.uid())
+  and exists (
+    select 1
+    from public.company_memberships m
+    where m.company_id = filing_readiness_snapshots.company_id
+      and m.user_id = (select auth.uid())
+      and m.role = 'owner'
   )
 );
 

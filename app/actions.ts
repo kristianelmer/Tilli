@@ -15,6 +15,7 @@ import {
 } from "./lib/billing";
 import { assertSupportedBrregIdentity, fetchBrregEntity } from "./lib/brreg";
 import { validateAuthorityObligation } from "./lib/authority-permission";
+import { evaluateAnnualReadinessGates } from "./lib/annual-readiness";
 import { COMPANY_DOCUMENTS_BUCKET, documentStorageKey } from "./lib/documents";
 import {
   DividendReceivedValidationError,
@@ -462,6 +463,19 @@ export async function confirmSimulatedRf1086Submission(formData: FormData) {
     .single();
   if (previewError || !preview) {
     redirect(`/?error=${encodeURIComponent(previewError?.message ?? "Fant ikke RF-1086 forhåndsvisning")}`);
+  }
+  const { data: readinessSnapshot, error: readinessSnapshotError } = await supabase
+    .from("filing_readiness_snapshots")
+    .select("ready, status, hard_blocks, warnings")
+    .eq("company_id", preview.company_id)
+    .eq("income_year", preview.income_year)
+    .eq("obligation", "aksjonaerregisteroppgaven")
+    .maybeSingle();
+  if (readinessSnapshotError) {
+    redirect(`/?error=${encodeURIComponent(readinessSnapshotError.message)}`);
+  }
+  if (!readinessSnapshot?.ready) {
+    redirect(`/?error=${encodeURIComponent("Aksjonærregisteroppgaven readiness må være lagret og klar før innsending.")}`);
   }
   const { data: blockingComments, error: blockingCommentError } = await supabase
     .from("filing_review_comments")
@@ -1860,17 +1874,17 @@ export async function requestFilingPackagePayment(formData: FormData) {
   if (accountError || !account) {
     redirect(`/?error=${encodeURIComponent(accountError?.message ?? "Billingkonto mangler")}`);
   }
-  const { data: readyPreviews, error: previewError } = await supabase
-    .from("filing_previews")
-    .select("id")
+  const { data: readinessSnapshot, error: readinessError } = await supabase
+    .from("filing_readiness_snapshots")
+    .select("ready, status, hard_blocks, warnings")
     .eq("company_id", companyId)
     .eq("income_year", incomeYear)
-    .eq("status", "ready")
-    .limit(1);
-  if (previewError) {
-    redirect(`/?error=${encodeURIComponent(previewError.message)}`);
+    .eq("obligation", "aksjonaerregisteroppgaven")
+    .maybeSingle();
+  if (readinessError) {
+    redirect(`/?error=${encodeURIComponent(readinessError.message)}`);
   }
-  const gate = productionBillingGate(account, Boolean(readyPreviews?.length));
+  const gate = productionBillingGate(account, Boolean(readinessSnapshot?.ready));
   if (!gate.chargeAllowed) {
     redirect(`/?error=${encodeURIComponent(gate.message)}`);
   }
@@ -1889,6 +1903,118 @@ export async function requestFilingPackagePayment(formData: FormData) {
     category: "billing",
     action: "filing_package_paid",
     message: `Filingpakke markert betalt for ${incomeYear}.`,
+  });
+
+  revalidatePath("/");
+  redirect("/");
+}
+
+export async function refreshAnnualReadinessSnapshots(formData: FormData) {
+  if (!hasSupabaseEnv()) {
+    redirect("/?error=Supabase%20env%20mangler");
+  }
+  const supabase = await createSupabaseServerClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+  if (!user) {
+    redirect("/?error=Innlogging%20kreves");
+  }
+
+  const companyId = formString(formData, "companyId");
+  const incomeYear = Number(formString(formData, "incomeYear") || "2025");
+  const { data: company, error: companyError } = await supabase
+    .from("companies")
+    .select("id, org_number, name, entity_type, address, postal_code, city, status_text, source, created_by, identity_confirmed_at, identity_locked_at, created_at")
+    .eq("id", companyId)
+    .single();
+  if (companyError || !company) {
+    redirect(`/?error=${encodeURIComponent(companyError?.message ?? "Fant ikke selskap")}`);
+  }
+
+  const [
+    { data: setups, error: setupsError },
+    { data: ledgerEntries, error: ledgerError },
+    { data: holdingActions, error: actionsError },
+    { data: bankTransactions, error: bankError },
+    { data: documents, error: documentsError },
+    { data: overrides, error: overridesError },
+    { data: locks, error: locksError },
+    { data: billingAccount, error: billingError },
+    { data: authorityPermissions, error: authorityError },
+    { data: filingPreviews, error: previewsError },
+    { data: filingSubmissions, error: submissionsError },
+  ] = await Promise.all([
+    supabase.from("opening_balance_setups").select("id, company_id, income_year, bank_balance, share_capital, share_count, nominal_value, locked_at, created_by").eq("company_id", companyId).eq("income_year", incomeYear),
+    supabase.from("ledger_entries").select("id, company_id, setup_id, income_year, entry_type, memo, lines, risk_flags, warning_accepted_by, warning_accepted_at, created_by, created_at").eq("company_id", companyId).eq("income_year", incomeYear),
+    supabase.from("holding_actions").select("id, company_id, income_year, action_type, action_date, payload, ledger_entry_id, bank_transaction_id, document_id, risk_level, blocker_code, created_by, created_at").eq("company_id", companyId).eq("income_year", incomeYear),
+    supabase.from("bank_transactions").select("id, company_id, income_year, transaction_date, text, amount, balance, source_hash, matched_entry_id, matched_action_id, accepted_warning, created_by, created_at").eq("company_id", companyId).eq("income_year", incomeYear),
+    supabase.from("documents").select("id, company_id, income_year, document_type, name, linked_to, status, retention_years, storage_key, created_by, created_at").eq("company_id", companyId).eq("income_year", incomeYear),
+    supabase.from("filing_overrides").select("id, preview_id, company_id, income_year, filing, field_target, old_value, new_value, reason, risk_level, owner_confirmed_by, owner_confirmed_at, created_by, created_at").eq("company_id", companyId).eq("income_year", incomeYear),
+    supabase.from("period_locks").select("id, company_id, income_year, reason, locked_by, locked_at").eq("company_id", companyId).eq("income_year", incomeYear),
+    supabase.from("billing_accounts").select("company_id, pricing_plan, monthly_nok, filing_package_nok, founder_cohort_number, subscription_active, filing_package_paid, supported_case, refund_eligible, no_charge_reason").eq("company_id", companyId).maybeSingle(),
+    supabase.from("authority_permissions").select("company_id, obligation, submitter_user_id, confirmed_by, confirmed_at, production_enabled").eq("company_id", companyId),
+    supabase.from("filing_previews").select("id, company_id, setup_id, income_year, filing, status, issues, preview, hovedskjema_xml, underskjema_xml, source, created_at").eq("company_id", companyId).eq("income_year", incomeYear),
+    supabase.from("filing_submissions").select("id, preview_id, company_id, income_year, filing, mode, adapter_mode, payload_hash, idempotency_key, status, calls, receipt_id, feedback_document_ids, feedback_items, receipt_metadata, submitted_payload_ref, submitted_payload, authority_confirmed_at, preview_confirmed_at, created_at, updated_at, submitted_by").eq("company_id", companyId).eq("income_year", incomeYear),
+  ]);
+  const firstError =
+    setupsError ||
+    ledgerError ||
+    actionsError ||
+    bankError ||
+    documentsError ||
+    overridesError ||
+    locksError ||
+    (billingError?.code === "PGRST116" ? null : billingError) ||
+    authorityError ||
+    previewsError ||
+    submissionsError;
+  if (firstError) {
+    redirect(`/?error=${encodeURIComponent(firstError.message)}`);
+  }
+
+  const snapshots = evaluateAnnualReadinessGates({
+    company,
+    incomeYear,
+    setups: setups ?? [],
+    ledgerEntries: ledgerEntries ?? [],
+    holdingActions: holdingActions ?? [],
+    bankTransactions: bankTransactions ?? [],
+    documents: documents ?? [],
+    overrides: overrides ?? [],
+    locks: locks ?? [],
+    billingAccount: billingAccount ?? null,
+    authorityPermissions: authorityPermissions ?? [],
+    filingPreviews: filingPreviews ?? [],
+    filingSubmissions: filingSubmissions ?? [],
+  });
+
+  const { error: upsertError } = await supabase.from("filing_readiness_snapshots").upsert(
+    snapshots.map((snapshot) => ({
+      company_id: snapshot.company_id,
+      income_year: snapshot.income_year,
+      obligation: snapshot.obligation,
+      status: snapshot.status,
+      ready: snapshot.ready,
+      hard_blocks: snapshot.hard_blocks,
+      warnings: snapshot.warnings,
+      accepted_warnings: snapshot.accepted_warnings,
+      evaluated_at: snapshot.evaluated_at,
+      created_by: user.id,
+      updated_at: new Date().toISOString(),
+    })),
+    { onConflict: "company_id,income_year,obligation" },
+  );
+  if (upsertError) {
+    redirect(`/?error=${encodeURIComponent(upsertError.message)}`);
+  }
+
+  await supabase.from("audit_events").insert({
+    company_id: companyId,
+    actor_id: user.id,
+    category: "filing",
+    action: "annual_readiness_refreshed",
+    message: `Annual loop readiness oppdatert for ${incomeYear}.`,
   });
 
   revalidatePath("/");

@@ -21,6 +21,7 @@ import {
   recordShareSale,
   recordShareholderLoan,
   recordTaxSettlement,
+  refreshAnnualReadinessSnapshots,
   requestFilingPackagePayment,
   saveBillingAccount,
   signIn,
@@ -47,6 +48,7 @@ import {
   listDocumentsForCompanies,
   listFilingPreviews,
   listFilingOverrides,
+  listFilingReadinessSnapshots,
   listFilingReviewComments,
   listFilingSubmissions,
   listHoldingActions,
@@ -84,6 +86,7 @@ export default async function Home({ searchParams }: HomeProps) {
   const { previews } = user ? await listFilingPreviews(companies.map((company) => company.id)) : { previews: [] };
   const { submissions } = user ? await listFilingSubmissions(companies.map((company) => company.id)) : { submissions: [] };
   const { overrides } = user ? await listFilingOverrides(companies.map((company) => company.id)) : { overrides: [] };
+  const { readinessSnapshots } = user ? await listFilingReadinessSnapshots(companies.map((company) => company.id)) : { readinessSnapshots: [] };
   const { comments } = user ? await listFilingReviewComments(companies.map((company) => company.id)) : { comments: [] };
   const { authorityPermissions } = user ? await listAuthorityPermissions(companies.map((company) => company.id)) : { authorityPermissions: [] };
   const { billingAccounts } = user ? await listBillingAccounts(companies.map((company) => company.id)) : { billingAccounts: [] };
@@ -123,8 +126,11 @@ export default async function Home({ searchParams }: HomeProps) {
   ).sort((a, b) => b - a);
   const primaryIncomeYear = incomeYears[0] ?? 2025;
   const primaryBillingAccount = billingAccounts.find((account) => account.company_id === primaryCompanyId);
-  const primaryFilingReady = previews.some(
-    (preview) => preview.company_id === primaryCompanyId && preview.income_year === primaryIncomeYear && preview.status === "ready",
+  const primaryReadinessSnapshots = readinessSnapshots.filter(
+    (snapshot) => snapshot.company_id === primaryCompanyId && snapshot.income_year === primaryIncomeYear,
+  );
+  const primaryFilingReady = primaryReadinessSnapshots.some(
+    (snapshot) => snapshot.obligation === "aksjonaerregisteroppgaven" && snapshot.ready,
   );
   const primaryBillingGate = primaryBillingAccount ? productionBillingGate(primaryBillingAccount, primaryFilingReady) : null;
   const primaryAuthorityPermissions = authorityPermissions.filter((permission) => permission.company_id === primaryCompanyId);
@@ -809,6 +815,38 @@ export default async function Home({ searchParams }: HomeProps) {
                       </form>
                     ) : null}
                   </div>
+                </div>
+              </section>
+
+              <section className="band">
+                <div className="sectionHeader">
+                  <p className="eyebrow">Annual loop readiness</p>
+                  <h2>Separate gates for RF-1086, skattemelding og årsregnskap.</h2>
+                </div>
+                <form className="dataPanel formPanel widePanel" action={refreshAnnualReadinessSnapshots}>
+                  <input name="companyId" type="hidden" value={primaryCompanyId} />
+                  <label>
+                    Inntektsår
+                    <input name="incomeYear" inputMode="numeric" defaultValue={primaryIncomeYear} required />
+                  </label>
+                  <button className="primaryButton" type="submit">
+                    Oppdater readiness
+                  </button>
+                </form>
+                <div className="readinessGrid">
+                  {authorityObligations.map((obligation) => {
+                    const snapshot = primaryReadinessSnapshots.find((item) => item.obligation === obligation);
+                    return (
+                      <div className="readinessItem" key={obligation}>
+                        <span>{authorityObligationLabel(obligation)}</span>
+                        <strong data-status={snapshot?.status ?? "draft"}>{snapshot?.status ?? "Ikke vurdert"}</strong>
+                        <p>{snapshot?.ready ? "Klar for neste produksjonsgate." : "Må oppdateres eller ryddes før filing."}</p>
+                        <p>{snapshot?.hard_blocks.length ?? 0} harde blokkeringer.</p>
+                        <p>{snapshot?.warnings.length ?? 0} åpne advarsler.</p>
+                        <p>{snapshot?.accepted_warnings.length ?? 0} aksepterte advarsler.</p>
+                      </div>
+                    );
+                  })}
                 </div>
               </section>
 
