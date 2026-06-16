@@ -14,6 +14,7 @@ import {
   productionBillingGate,
 } from "./lib/billing";
 import { assertSupportedBrregIdentity, fetchBrregEntity } from "./lib/brreg";
+import { validateAuthorityObligation } from "./lib/authority-permission";
 import { COMPANY_DOCUMENTS_BUCKET, documentStorageKey } from "./lib/documents";
 import {
   DividendReceivedValidationError,
@@ -1945,6 +1946,55 @@ export async function markBillingRefundEligible(formData: FormData) {
     category: "billing",
     action: "billing_refund_eligible",
     message: "Filingpakke markert refusjonsberettiget etter støttet feil.",
+  });
+
+  revalidatePath("/");
+  redirect("/");
+}
+
+export async function confirmAuthorityPermission(formData: FormData) {
+  if (!hasSupabaseEnv()) {
+    redirect("/?error=Supabase%20env%20mangler");
+  }
+  const supabase = await createSupabaseServerClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+  if (!user) {
+    redirect("/?error=Innlogging%20kreves");
+  }
+
+  const companyId = formString(formData, "companyId");
+  let obligation;
+  try {
+    obligation = validateAuthorityObligation(formString(formData, "obligation"));
+  } catch (error) {
+    redirect(`/?error=${encodeURIComponent(error instanceof Error ? error.message : "Ugyldig myndighetsplikt")}`);
+  }
+  const now = new Date().toISOString();
+  const productionEnabled = formData.get("productionEnabled") === "on";
+  const { error } = await supabase.from("authority_permissions").upsert(
+    {
+      company_id: companyId,
+      obligation,
+      submitter_user_id: user.id,
+      confirmed_by: user.id,
+      confirmed_at: now,
+      production_enabled: productionEnabled,
+      updated_at: now,
+    },
+    { onConflict: "company_id,obligation" },
+  );
+  if (error) {
+    redirect(`/?error=${encodeURIComponent(error.message)}`);
+  }
+
+  await supabase.from("audit_events").insert({
+    company_id: companyId,
+    actor_id: user.id,
+    category: "submission",
+    action: "authority_permission_confirmed",
+    message: `Innsendingsrett bekreftet for ${obligation}. Produksjonsgate: ${productionEnabled ? "aktiv" : "av"}.`,
   });
 
   revalidatePath("/");

@@ -142,6 +142,18 @@ test("builds company-year archive from persisted workspace rows", () => {
         updated_at: "2026-01-02T00:00:00Z",
       },
     ],
+    authorityPermissions: [
+      {
+        id: "authority-id",
+        company_id: "company-id",
+        obligation: "aksjonaerregisteroppgaven",
+        submitter_user_id: "owner",
+        confirmed_by: "owner",
+        confirmed_at: "2026-01-02T00:00:00Z",
+        production_enabled: false,
+        updated_at: "2026-01-02T00:00:00Z",
+      },
+    ],
     filingPreviews: [
       {
         id: "preview-id",
@@ -190,4 +202,5 @@ test("builds company-year archive from persisted workspace rows", () => {
   assert.equal(archive.taxSettlements[0].document.id, "tax-document-id");
   assert.equal(archive.taxSettlementLedgerEntries[0].entry_type, "tax_settlement");
   assert.equal(archive.billingAccounts[0].pricing_plan, "founder");
+  assert.equal(archive.authorityPermissions[0].obligation, "aksjonaerregisteroppgaven");
 });

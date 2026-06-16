@@ -1,4 +1,5 @@
 import type {
+  AuthorityPermissionRow,
   BillingAccountRow,
   CompanyWorkspaceRow,
   DocumentRow,
@@ -30,6 +31,7 @@ export function buildPersistedCompanyArchive(input: {
   documents: DocumentRow[];
   holdingActions?: HoldingActionRow[];
   billingAccounts?: BillingAccountRow[];
+  authorityPermissions?: AuthorityPermissionRow[];
   filingPreviews: FilingPreviewRow[];
   filingSubmissions: FilingSubmissionRow[];
 }) {
@@ -82,6 +84,7 @@ export function buildPersistedCompanyArchive(input: {
     })),
     taxSettlementLedgerEntries: input.ledgerEntries.filter((entry) => taxSettlementLedgerIds.has(entry.id)),
     billingAccounts: input.billingAccounts ?? [],
+    authorityPermissions: input.authorityPermissions ?? [],
     documents: input.documents.map((document) => ({
       id: document.id,
       incomeYear: document.income_year,

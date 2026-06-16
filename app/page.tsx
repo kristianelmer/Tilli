@@ -3,6 +3,7 @@ import {
   activateBillingSubscription,
   addFilingOverride,
   addFilingReviewComment,
+  confirmAuthorityPermission,
   confirmSimulatedRf1086Submission,
   createOpeningBalanceSetup,
   createWorkspace,
@@ -28,12 +29,18 @@ import {
   uploadDocument,
 } from "./actions";
 import { productionBillingGate } from "./lib/billing";
+import {
+  authorityObligationLabel,
+  authorityObligations,
+  productionAuthorityGate,
+} from "./lib/authority-permission";
 import { buildDeadlineDashboard, deadlineStatusLabel } from "./lib/deadlines";
 import { summarizeDividendReceivedAnnualImpact } from "./lib/dividend-received";
 import { estimateAnnualTax } from "./lib/tax-settlement";
 import {
   getCurrentUser,
   hasSupabaseEnv,
+  listAuthorityPermissions,
   listBankTransactions,
   listBillingAccounts,
   listCompanyWorkspaces,
@@ -78,6 +85,7 @@ export default async function Home({ searchParams }: HomeProps) {
   const { submissions } = user ? await listFilingSubmissions(companies.map((company) => company.id)) : { submissions: [] };
   const { overrides } = user ? await listFilingOverrides(companies.map((company) => company.id)) : { overrides: [] };
   const { comments } = user ? await listFilingReviewComments(companies.map((company) => company.id)) : { comments: [] };
+  const { authorityPermissions } = user ? await listAuthorityPermissions(companies.map((company) => company.id)) : { authorityPermissions: [] };
   const { billingAccounts } = user ? await listBillingAccounts(companies.map((company) => company.id)) : { billingAccounts: [] };
   const { transactions } = user ? await listBankTransactions(companies.map((company) => company.id)) : { transactions: [] };
   const { actions } = user ? await listHoldingActions(companies.map((company) => company.id)) : { actions: [] };
@@ -119,6 +127,7 @@ export default async function Home({ searchParams }: HomeProps) {
     (preview) => preview.company_id === primaryCompanyId && preview.income_year === primaryIncomeYear && preview.status === "ready",
   );
   const primaryBillingGate = primaryBillingAccount ? productionBillingGate(primaryBillingAccount, primaryFilingReady) : null;
+  const primaryAuthorityPermissions = authorityPermissions.filter((permission) => permission.company_id === primaryCompanyId);
   const deadlines = incomeYears.flatMap((incomeYear) => buildDeadlineDashboard({ incomeYear, submissions }));
 
   return (
@@ -800,6 +809,51 @@ export default async function Home({ searchParams }: HomeProps) {
                       </form>
                     ) : null}
                   </div>
+                </div>
+              </section>
+
+              <section className="band mutedBand">
+                <div className="sectionHeader">
+                  <p className="eyebrow">Innsendingsrett</p>
+                  <h2>Bekreft hvem som kan sende inn per myndighetsplikt.</h2>
+                </div>
+                <form className="dataPanel formPanel widePanel" action={confirmAuthorityPermission}>
+                  <input name="companyId" type="hidden" value={primaryCompanyId} />
+                  <label>
+                    Plikt
+                    <select name="obligation" defaultValue="aksjonaerregisteroppgaven">
+                      {authorityObligations.map((obligation) => (
+                        <option key={obligation} value={obligation}>
+                          {authorityObligationLabel(obligation)}
+                        </option>
+                      ))}
+                    </select>
+                  </label>
+                  <label>
+                    <input name="productionEnabled" type="checkbox" />
+                    Intern produksjonsgate er aktivert for denne plikten
+                  </label>
+                  <button className="secondaryButton" type="submit">
+                    Bekreft innsendingsrett
+                  </button>
+                  <p>Dette lagrer bare rettighetsbekreftelse. Ingen live innsending utføres her.</p>
+                </form>
+                <div className="readinessGrid">
+                  {authorityObligations.map((obligation) => {
+                    const gate = productionAuthorityGate(primaryAuthorityPermissions, obligation);
+                    const permission = primaryAuthorityPermissions.find((item) => item.obligation === obligation);
+                    return (
+                      <div className="readinessItem" key={obligation}>
+                        <span>{authorityObligationLabel(obligation)}</span>
+                        <strong data-status={gate.allowed ? "ready" : permission ? "warning" : "draft"}>{gate.status}</strong>
+                        <p>{gate.message}</p>
+                        <p>
+                          Bekreftet:{" "}
+                          {permission?.confirmed_at ? new Date(permission.confirmed_at).toLocaleString("nb-NO") : "Nei"}
+                        </p>
+                      </div>
+                    );
+                  })}
                 </div>
               </section>
 

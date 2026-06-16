@@ -217,6 +217,17 @@ export type BillingAccountRow = {
   updated_at: string;
 };
 
+export type AuthorityPermissionRow = {
+  id: string;
+  company_id: string;
+  obligation: "aksjonaerregisteroppgaven" | "skattemelding" | "aarsregnskap";
+  submitter_user_id: string;
+  confirmed_by: string;
+  confirmed_at: string;
+  production_enabled: boolean;
+  updated_at: string;
+};
+
 export function hasSupabaseEnv() {
   return Boolean(process.env.SUPABASE_URL && process.env.SUPABASE_ANON_KEY);
 }
@@ -476,6 +487,23 @@ export async function listBillingAccounts(companyIds: string[]) {
 
   return {
     billingAccounts: (data ?? []) as BillingAccountRow[],
+    error: error?.message ?? null,
+  };
+}
+
+export async function listAuthorityPermissions(companyIds: string[]) {
+  if (!hasSupabaseEnv() || companyIds.length === 0) {
+    return { authorityPermissions: [] as AuthorityPermissionRow[], error: null };
+  }
+  const supabase = await createSupabaseServerClient();
+  const { data, error } = await supabase
+    .from("authority_permissions")
+    .select("id, company_id, obligation, submitter_user_id, confirmed_by, confirmed_at, production_enabled, updated_at")
+    .in("company_id", companyIds)
+    .order("updated_at", { ascending: false });
+
+  return {
+    authorityPermissions: (data ?? []) as AuthorityPermissionRow[],
     error: error?.message ?? null,
   };
 }

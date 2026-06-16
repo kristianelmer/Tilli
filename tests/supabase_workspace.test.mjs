@@ -8,6 +8,7 @@ import { createClient } from "@supabase/supabase-js";
 import pg from "pg";
 
 import { buildPersistedCompanyArchive } from "../app/lib/archive.ts";
+import { productionAuthorityGate } from "../app/lib/authority-permission.ts";
 import { assertBankTransactionMatchesCost, buildAdminCostLedgerLines, parseBankCsv } from "../app/lib/bank.ts";
 import { buildBillingAccount, productionBillingGate } from "../app/lib/billing.ts";
 import {
@@ -386,6 +387,53 @@ test(
       .single();
     assert.ifError(filingPreviewError);
     assert.equal(filingPreview.status, "ready");
+
+    assert.equal(productionAuthorityGate([], "aksjonaerregisteroppgaven").status, "missing_authority_confirmation");
+    const { data: authorityPermission, error: authorityPermissionError } = await owner
+      .from("authority_permissions")
+      .insert({
+        company_id: companyId,
+        obligation: "aksjonaerregisteroppgaven",
+        submitter_user_id: ownerUser.id,
+        confirmed_by: ownerUser.id,
+        production_enabled: true,
+      })
+      .select("id, company_id, obligation, submitter_user_id, confirmed_by, confirmed_at, production_enabled, updated_at")
+      .single();
+    assert.ifError(authorityPermissionError);
+    assert.equal(authorityPermission.obligation, "aksjonaerregisteroppgaven");
+    assert.equal(authorityPermission.submitter_user_id, ownerUser.id);
+    assert.equal(productionAuthorityGate([authorityPermission], "aksjonaerregisteroppgaven").allowed, true);
+    const { error: authorityAuditError } = await owner.from("audit_events").insert({
+      company_id: companyId,
+      actor_id: ownerUser.id,
+      category: "submission",
+      action: "authority_permission_confirmed",
+      message: "Innsendingsrett bekreftet for aksjonaerregisteroppgaven.",
+    });
+    assert.ifError(authorityAuditError);
+    const { error: reviewerAuthorityError } = await reviewer.from("authority_permissions").insert({
+      company_id: companyId,
+      obligation: "skattemelding",
+      submitter_user_id: reviewerUser.id,
+      confirmed_by: reviewerUser.id,
+      production_enabled: false,
+    });
+    assert.ok(reviewerAuthorityError);
+    const { error: outsiderAuthorityError } = await outsider.from("authority_permissions").insert({
+      company_id: companyId,
+      obligation: "aarsregnskap",
+      submitter_user_id: outsiderUser.id,
+      confirmed_by: outsiderUser.id,
+      production_enabled: false,
+    });
+    assert.ok(outsiderAuthorityError);
+    const { data: outsiderAuthorityRows, error: outsiderAuthorityRowsError } = await outsider
+      .from("authority_permissions")
+      .select("id")
+      .eq("company_id", companyId);
+    assert.ifError(outsiderAuthorityRowsError);
+    assert.equal(outsiderAuthorityRows.length, 0);
 
     assert.throws(() => buildBillingAccount({ companyId, pricingPlan: "founder", founderCohortNumber: 101 }), /Founder-kull/);
     const billingAccount = buildBillingAccount({
@@ -1799,6 +1847,11 @@ test(
       .select("company_id, pricing_plan, monthly_nok, filing_package_nok, founder_cohort_number, subscription_active, filing_package_paid, supported_case, refund_eligible, no_charge_reason, updated_by, created_at, updated_at")
       .eq("company_id", companyId);
     assert.ifError(persistedBillingError);
+    const { data: persistedAuthorityPermissions, error: persistedAuthorityError } = await owner
+      .from("authority_permissions")
+      .select("id, company_id, obligation, submitter_user_id, confirmed_by, confirmed_at, production_enabled, updated_at")
+      .eq("company_id", companyId);
+    assert.ifError(persistedAuthorityError);
     const archive = buildPersistedCompanyArchive({
       company: persistedCompany,
       incomeYear: 2025,
@@ -1808,6 +1861,7 @@ test(
       documents: ownerDocuments,
       holdingActions: persistedHoldingActions,
       billingAccounts: persistedBillingAccounts,
+      authorityPermissions: persistedAuthorityPermissions,
       filingPreviews: [filingPreview],
       filingSubmissions: [filingSubmission],
     });
@@ -1821,6 +1875,7 @@ test(
     assert.equal(archive.taxSettlements[0].documentId, taxDocumentId);
     assert.equal(archive.taxSettlements[0].document.id, taxDocumentId);
     assert.equal(archive.billingAccounts[0].refund_eligible, true);
+    assert.equal(archive.authorityPermissions[0].obligation, "aksjonaerregisteroppgaven");
 
     const { data: outsiderArchiveCompany, error: outsiderArchiveCompanyError } = await outsider
       .from("companies")
