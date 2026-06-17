@@ -43,6 +43,7 @@ import {
 import { buildDeadlineDashboard, buildDeadlineReminderPlan, deadlineStatusLabel, defaultReminderPreferences } from "./lib/deadlines";
 import { summarizeDividendReceivedAnnualImpact } from "./lib/dividend-received";
 import { invitationStatus, reviewChecklistStatus } from "./lib/invitations";
+import { preProductionDirectFilingCopy, requiredNonAffiliationCopy } from "./lib/launch-copy";
 import { estimateAnnualTax } from "./lib/tax-settlement";
 import {
   getCurrentUser,
@@ -181,6 +182,25 @@ export default async function Home({ searchParams }: HomeProps) {
           <a href="#sikkerhet">Sikkerhet</a>
         </div>
       </nav>
+
+      <section className="band mutedBand">
+        <div className="sectionHeader">
+          <p className="eyebrow">Launch boundary</p>
+          <h1>Holding-first årsrapportering for enkle AS.</h1>
+        </div>
+        <div className="readinessGrid">
+          <div className="readinessItem">
+            <span>Myndigheter</span>
+            <strong data-status="warning">Ikke tilknyttet</strong>
+            <p>{requiredNonAffiliationCopy}</p>
+          </div>
+          <div className="readinessItem">
+            <span>Direkte filing</span>
+            <strong data-status="draft">Gatet</strong>
+            <p>{preProductionDirectFilingCopy}</p>
+          </div>
+        </div>
+      </section>
 
       <section className="workspace" id="arbeidsflate">
         <div className="intro">

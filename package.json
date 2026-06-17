@@ -21,6 +21,7 @@
     "test:dividend-received": "node --experimental-strip-types --test tests/dividend_received.test.mjs",
     "test:documents": "node --experimental-strip-types --test tests/documents.test.mjs",
     "test:filing-overrides": "node --experimental-strip-types --test tests/filing_overrides.test.mjs",
+    "test:launch-copy": "node --experimental-strip-types --test tests/launch_copy.test.mjs",
     "test:manual-journal": "node --experimental-strip-types --test tests/manual_journal.test.mjs",
     "test:opening": "node --experimental-strip-types --test tests/opening_balance.test.mjs",
     "test:owner-dividend": "node --experimental-strip-types --test tests/owner_dividend.test.mjs",
