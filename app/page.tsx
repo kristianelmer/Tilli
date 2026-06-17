@@ -4,6 +4,7 @@ import {
   addFilingOverride,
   addFilingReviewComment,
   acceptWorkspaceInvitation,
+  cancelBillingSubscription,
   confirmAuthorityPermission,
   confirmSimulatedRf1086Submission,
   createOpeningBalanceSetup,
@@ -974,6 +975,14 @@ export default async function Home({ searchParams }: HomeProps) {
                         <input name="companyId" type="hidden" value={primaryCompanyId} />
                         <button className="secondaryButton" type="submit">
                           Marker abonnement aktivt
+                        </button>
+                      </form>
+                    ) : null}
+                    {primaryBillingAccount?.subscription_active ? (
+                      <form action={cancelBillingSubscription}>
+                        <input name="companyId" type="hidden" value={primaryCompanyId} />
+                        <button className="secondaryButton" type="submit">
+                          Kanseller abonnement
                         </button>
                       </form>
                     ) : null}

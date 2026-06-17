@@ -5,6 +5,7 @@ import {
   BillingValidationError,
   applyBillingProviderEvent,
   buildBillingAccount,
+  isDuplicateBillingEventError,
   productionBillingGate,
   simulateBillingProviderEvent,
 } from "../app/lib/billing.ts";
@@ -114,4 +115,28 @@ test("simulated provider events persist idempotent payment and refund references
   assert.equal(refunded.refund_completed, true);
   assert.equal(refunded.refund_eligible, false);
   assert.equal(refunded.refund_provider_ref, "sim_refund_company-id_2025");
+});
+
+test("simulated provider events handle duplicate webhooks and subscription cancellation", () => {
+  const active = buildBillingAccount({
+    companyId: "company-id",
+    pricingPlan: "standard",
+    subscriptionActive: true,
+    filingPackagePaid: true,
+  });
+  const cancellationEvent = simulateBillingProviderEvent({
+    companyId: "company-id",
+    kind: "subscription_cancellation",
+    amountNok: 0,
+    status: "canceled",
+  });
+  const canceled = applyBillingProviderEvent(active, cancellationEvent);
+
+  assert.equal(cancellationEvent.idempotencyKey, "billing-company-id-subscription_cancellation");
+  assert.equal(canceled.subscription_active, false);
+  assert.equal(canceled.filing_package_paid, true);
+  assert.equal(canceled.subscription_provider_ref, "sim_subscription_cancellation_company-id");
+  assert.equal(isDuplicateBillingEventError({ code: "23505" }), true);
+  assert.equal(isDuplicateBillingEventError({ message: "duplicate key value violates unique constraint" }), true);
+  assert.equal(isDuplicateBillingEventError({ code: "PGRST000" }), false);
 });

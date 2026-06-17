@@ -280,8 +280,8 @@ export type BillingPaymentEventRow = {
   provider: string;
   provider_reference: string;
   idempotency_key: string;
-  kind: "subscription" | "filing_package" | "refund";
-  status: "created" | "succeeded" | "failed" | "refunded";
+  kind: "subscription" | "subscription_cancellation" | "filing_package" | "refund";
+  status: "created" | "succeeded" | "failed" | "refunded" | "canceled";
   amount_nok: number;
   income_year: number | null;
   payload: Record<string, unknown>;

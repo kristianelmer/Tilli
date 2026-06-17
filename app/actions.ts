@@ -12,6 +12,7 @@ import {
   applyBillingProviderEvent,
   BillingValidationError,
   buildBillingAccount,
+  isDuplicateBillingEventError,
   productionBillingGate,
   simulateBillingProviderEvent,
 } from "./lib/billing";
@@ -2289,7 +2290,7 @@ export async function activateBillingSubscription(formData: FormData) {
     payload: event,
     created_by: user.id,
   });
-  if (eventError && eventError.code !== "23505") {
+  if (eventError && !isDuplicateBillingEventError(eventError)) {
     redirect(`/?error=${encodeURIComponent(eventError.message)}`);
   }
   const { error } = await supabase
@@ -2374,7 +2375,7 @@ export async function requestFilingPackagePayment(formData: FormData) {
     payload: event,
     created_by: user.id,
   });
-  if (eventError && eventError.code !== "23505") {
+  if (eventError && !isDuplicateBillingEventError(eventError)) {
     redirect(`/?error=${encodeURIComponent(eventError.message)}`);
   }
 
@@ -2398,6 +2399,76 @@ export async function requestFilingPackagePayment(formData: FormData) {
     category: "billing",
     action: "filing_package_paid",
     message: `Filingpakke betalt for ${incomeYear} via ${event.providerReference}.`,
+  });
+
+  revalidatePath("/");
+  redirect("/");
+}
+
+export async function cancelBillingSubscription(formData: FormData) {
+  if (!hasSupabaseEnv()) {
+    redirect("/?error=Supabase%20env%20mangler");
+  }
+  const supabase = await createSupabaseServerClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+  if (!user) {
+    redirect("/?error=Innlogging%20kreves");
+  }
+
+  const companyId = formString(formData, "companyId");
+  await requireSensitiveActionStepUp(supabase, user.id, companyId, "billing_admin");
+  const { data: account, error: accountError } = await supabase
+    .from("billing_accounts")
+    .select("company_id, pricing_plan, monthly_nok, filing_package_nok, founder_cohort_number, subscription_active, filing_package_paid, supported_case, refund_eligible, refund_completed, no_charge_reason, provider_customer_ref, subscription_provider_ref, filing_package_payment_ref, refund_provider_ref")
+    .eq("company_id", companyId)
+    .single();
+  if (accountError || !account) {
+    redirect(`/?error=${encodeURIComponent(accountError?.message ?? "Billingkonto mangler")}`);
+  }
+
+  const event = simulateBillingProviderEvent({
+    companyId,
+    kind: "subscription_cancellation",
+    amountNok: 0,
+    status: "canceled",
+  });
+  const updated = applyBillingProviderEvent(account, event);
+  const { error: eventError } = await supabase.from("billing_payment_events").insert({
+    company_id: companyId,
+    provider: event.provider,
+    provider_reference: event.providerReference,
+    idempotency_key: event.idempotencyKey,
+    kind: event.kind,
+    status: event.status,
+    amount_nok: event.amountNok,
+    payload: event,
+    created_by: user.id,
+  });
+  if (eventError && !isDuplicateBillingEventError(eventError)) {
+    redirect(`/?error=${encodeURIComponent(eventError.message)}`);
+  }
+
+  const { error } = await supabase
+    .from("billing_accounts")
+    .update({
+      subscription_active: updated.subscription_active,
+      subscription_provider_ref: updated.subscription_provider_ref,
+      updated_by: user.id,
+      updated_at: new Date().toISOString(),
+    })
+    .eq("company_id", companyId);
+  if (error) {
+    redirect(`/?error=${encodeURIComponent(error.message)}`);
+  }
+
+  await supabase.from("audit_events").insert({
+    company_id: companyId,
+    actor_id: user.id,
+    category: "billing",
+    action: "billing_subscription_canceled",
+    message: `Abonnement kansellert via ${event.providerReference}.`,
   });
 
   revalidatePath("/");
@@ -2668,7 +2739,7 @@ export async function markBillingRefundEligible(formData: FormData) {
     payload: event,
     created_by: user.id,
   });
-  if (eventError && eventError.code !== "23505") {
+  if (eventError && !isDuplicateBillingEventError(eventError)) {
     redirect(`/?error=${encodeURIComponent(eventError.message)}`);
   }
 

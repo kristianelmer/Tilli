@@ -25,8 +25,8 @@ export type BillingAccount = {
   refund_completed?: boolean;
 };
 
-export type BillingPaymentKind = "subscription" | "filing_package" | "refund";
-export type BillingPaymentStatus = "created" | "succeeded" | "failed" | "refunded";
+export type BillingPaymentKind = "subscription" | "subscription_cancellation" | "filing_package" | "refund";
+export type BillingPaymentStatus = "created" | "succeeded" | "failed" | "refunded" | "canceled";
 
 export type BillingProviderEvent = {
   provider: "simulation";
@@ -188,6 +188,16 @@ export function applyBillingProviderEvent(account: BillingAccount, event: Billin
       subscription_active: event.status === "succeeded",
     };
   }
+  if (event.kind === "subscription_cancellation") {
+    if (event.status !== "canceled" && event.status !== "succeeded") {
+      return account;
+    }
+    return {
+      ...account,
+      subscription_active: false,
+      subscription_provider_ref: event.providerReference,
+    };
+  }
   if (event.kind === "filing_package") {
     if (event.status !== "succeeded") {
       return { ...account, filing_package_paid: false };
@@ -208,4 +218,8 @@ export function applyBillingProviderEvent(account: BillingAccount, event: Billin
     refund_completed: true,
     refund_eligible: false,
   };
+}
+
+export function isDuplicateBillingEventError(error: { code?: string | null; message?: string | null } | null | undefined) {
+  return error?.code === "23505" || /duplicate key/i.test(error?.message ?? "");
 }

@@ -49,3 +49,33 @@ test("operator summary highlights filing, billing, refund, restore, and audit st
   assert.equal(summaries[0].restoreStatus, "missing_evidence");
   assert.deepEqual(summaries[0].recentAuditActions, ["billing_refund_completed", "filing_failed"]);
 });
+
+test("operator summary keeps cross-company data separated", () => {
+  const summaries = buildOperatorSupportSummaries({
+    companies: [{ id: "company-a", org_number: "314259521", name: "A Holding AS" }],
+    readinessSnapshots: [
+      { company_id: "company-a", hard_blocks: [{ code: "missing_authority" }] },
+      { company_id: "company-b", hard_blocks: [{ code: "billing_missing" }, { code: "bank_missing" }] },
+    ],
+    submissions: [
+      { company_id: "company-a", status: "submitted" },
+      { company_id: "company-b", status: "failed" },
+    ],
+    authorityPermissions: [{ company_id: "company-b", production_enabled: true }],
+    billingAccounts: [{ company_id: "company-b", refund_eligible: true }],
+    billingPaymentEvents: [],
+    cancellations: [{ company_id: "company-b", evidence: { missingDocumentIds: ["leaked"] } }],
+    auditEvents: [
+      { company_id: "company-a", action: "visible_audit", created_at: "2026-06-17T10:00:00.000Z" },
+      { company_id: "company-b", action: "hidden_audit", created_at: "2026-06-17T11:00:00.000Z" },
+    ],
+  });
+
+  assert.equal(summaries.length, 1);
+  assert.equal(summaries[0].filingStatus, "submitted");
+  assert.equal(summaries[0].readinessBlockCount, 1);
+  assert.equal(summaries[0].authorityProductionEnabled, 0);
+  assert.equal(summaries[0].billingStatus, "unpaid");
+  assert.equal(summaries[0].restoreStatus, "missing_evidence");
+  assert.deepEqual(summaries[0].recentAuditActions, ["visible_audit"]);
+});
