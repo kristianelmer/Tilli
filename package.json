@@ -22,6 +22,7 @@
     "test:dividend-received": "node --experimental-strip-types --test tests/dividend_received.test.mjs",
     "test:documents": "node --experimental-strip-types --test tests/documents.test.mjs",
     "test:filing-overrides": "node --experimental-strip-types --test tests/filing_overrides.test.mjs",
+    "test:filing-release-gate": "node --experimental-strip-types --test tests/filing_release_gate.test.mjs",
     "test:launch-copy": "node --experimental-strip-types --test tests/launch_copy.test.mjs",
     "test:legal-policy": "node --test tests/legal_policy_pack.test.mjs",
     "test:manual-journal": "node --experimental-strip-types --test tests/manual_journal.test.mjs",
