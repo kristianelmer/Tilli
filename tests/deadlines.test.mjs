@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 
-import { buildDeadlineDashboard, deadlineStatusLabel } from "../app/lib/deadlines.ts";
+import { buildDeadlineDashboard, buildDeadlineReminderPlan, deadlineStatusLabel } from "../app/lib/deadlines.ts";
 
 const baseSubmission = {
   filing: "aksjonærregisteroppgaven",
@@ -83,4 +83,77 @@ test("represents RF-1086, skattemelding, and årsregnskap separately", () => {
       ["årsregnskap", "2026-07-31"],
     ],
   );
+});
+
+test("queues configurable upcoming reminders with Norwegian no-guarantee language", () => {
+  const reminders = buildDeadlineReminderPlan({
+    incomeYear: 2025,
+    recipientEmail: "owner@example.no",
+    submissions: [],
+    readinessSnapshots: [
+      { obligation: "aksjonaerregisteroppgaven", income_year: 2025, ready: false, hard_blocks: [], status: "warning" },
+      { obligation: "skattemelding", income_year: 2025, ready: true, hard_blocks: [], status: "ready" },
+      { obligation: "aarsregnskap", income_year: 2025, ready: true, hard_blocks: [], status: "ready" },
+    ],
+    notifications: [],
+    preferences: [
+      { filing: "aksjonærregisteroppgaven", enabled: true, leadDays: [30] },
+      { filing: "skattemelding for AS", enabled: false, leadDays: [30] },
+      { filing: "årsregnskap", enabled: true, leadDays: [30] },
+    ],
+    today: new Date("2026-01-01T12:00:00Z"),
+  });
+
+  assert.equal(reminders[0].shouldQueue, true);
+  assert.equal(reminders[0].reminderKind, "upcoming");
+  assert.match(reminders[0].subject, /Kommende frist/);
+  assert.match(reminders[0].body, /aksjonærregisteroppgaven/);
+  assert.doesNotMatch(reminders[0].body, /garanterer at.*gebyr/i);
+  assert.equal(reminders[1].skipReason, "opted_out");
+  assert.equal(reminders[2].skipReason, "outside_reminder_window");
+});
+
+test("prevents duplicate reminders and skips completed filings", () => {
+  const reminders = buildDeadlineReminderPlan({
+    incomeYear: 2025,
+    recipientEmail: "owner@example.no",
+    submissions: [baseSubmission],
+    readinessSnapshots: [],
+    notifications: [
+      {
+        template: "deadline_reminder",
+        status: "sent",
+        payload: { dedupeKey: "deadline:2025:skattemelding for AS:due:2026-05-31" },
+      },
+    ],
+    today: new Date("2026-05-31T12:00:00Z"),
+  });
+
+  assert.equal(reminders[0].skipReason, "already_completed");
+  assert.equal(reminders[1].skipReason, "duplicate");
+  assert.equal(reminders[2].skipReason, "outside_reminder_window");
+});
+
+test("queues overdue guidance without unsupported cases", () => {
+  const reminders = buildDeadlineReminderPlan({
+    incomeYear: 2025,
+    recipientEmail: "owner@example.no",
+    submissions: [],
+    readinessSnapshots: [
+      {
+        obligation: "skattemelding",
+        income_year: 2025,
+        ready: false,
+        status: "blocked",
+        hard_blocks: [{ code: "tax_return_unclear_fritaksmetoden", level: "block", message: "Unsupported" }],
+      },
+    ],
+    notifications: [],
+    today: new Date("2026-06-01T12:00:00Z"),
+  });
+
+  assert.equal(reminders[0].reminderKind, "overdue");
+  assert.equal(reminders[0].shouldQueue, true);
+  assert.equal(reminders[1].skipReason, "unsupported_case");
+  assert.match(reminders[0].body, /kan ikke garantere/i);
 });

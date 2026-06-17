@@ -15,6 +15,7 @@ import {
   markBillingRefundEligible,
   markBillingUnsupported,
   postManualJournal,
+  queueDeadlineReminders,
   recordAdminCost,
   recordDividendReceived,
   recordOwnerDividend,
@@ -39,7 +40,7 @@ import {
   authorityObligations,
   productionAuthorityGate,
 } from "./lib/authority-permission";
-import { buildDeadlineDashboard, deadlineStatusLabel } from "./lib/deadlines";
+import { buildDeadlineDashboard, buildDeadlineReminderPlan, deadlineStatusLabel, defaultReminderPreferences } from "./lib/deadlines";
 import { summarizeDividendReceivedAnnualImpact } from "./lib/dividend-received";
 import { invitationStatus, reviewChecklistStatus } from "./lib/invitations";
 import { estimateAnnualTax } from "./lib/tax-settlement";
@@ -156,6 +157,16 @@ export default async function Home({ searchParams }: HomeProps) {
       .map((comment) => ({ severity: comment.severity, acknowledged_by: comment.acknowledged_by })),
   );
   const deadlines = incomeYears.flatMap((incomeYear) => buildDeadlineDashboard({ incomeYear, submissions }));
+  const deadlineReminderPlan = primaryCompanyId
+    ? buildDeadlineReminderPlan({
+        incomeYear: primaryIncomeYear,
+        recipientEmail: user?.email ?? "",
+        submissions: submissions.filter((submission) => submission.company_id === primaryCompanyId),
+        readinessSnapshots: primaryReadinessSnapshots,
+        notifications: primaryNotifications,
+      })
+    : [];
+  const deadlineReminderPreferences = defaultReminderPreferences();
 
   return (
     <main className="shell">
@@ -1066,6 +1077,25 @@ export default async function Home({ searchParams }: HomeProps) {
                   <p className="eyebrow">Frister</p>
                   <h2>Persistert filingstatus per inntektsår.</h2>
                 </div>
+                {primaryCompanyId ? (
+                  <form className="dataPanel formPanel widePanel" action={queueDeadlineReminders}>
+                    <input name="companyId" type="hidden" value={primaryCompanyId} />
+                    <input name="incomeYear" type="hidden" value={primaryIncomeYear} />
+                    <label>
+                      Varseldager
+                      <input name="leadDays" defaultValue="30,7,1,0,-1" />
+                    </label>
+                    {deadlineReminderPreferences.map((preference) => (
+                      <label className="checkboxLabel" key={preference.filing}>
+                        <input name={`reminder_${preference.filing}`} type="checkbox" defaultChecked />
+                        {preference.filing}
+                      </label>
+                    ))}
+                    <button className="secondaryButton" type="submit">
+                      Kø fristvarsler
+                    </button>
+                  </form>
+                ) : null}
                 <div className="readinessGrid">
                   {deadlines.map((deadline) => (
                     <div className="readinessItem" key={`${deadline.incomeYear}-${deadline.filing}`}>
@@ -1084,6 +1114,18 @@ export default async function Home({ searchParams }: HomeProps) {
                       <p>Lås åpningsbalanse for å beregne filingfrister.</p>
                     </div>
                   ) : null}
+                </div>
+                <div className="readinessGrid">
+                  {deadlineReminderPlan.map((reminder) => (
+                    <div className="readinessItem" key={reminder.dedupeKey}>
+                      <span>{reminder.filing}</span>
+                      <strong data-status={reminder.shouldQueue ? "ready" : "draft"}>
+                        {reminder.shouldQueue ? "Varsles" : reminder.skipReason}
+                      </strong>
+                      <p>{reminder.subject}</p>
+                      <p>{reminder.body}</p>
+                    </div>
+                  ))}
                 </div>
               </section>
 

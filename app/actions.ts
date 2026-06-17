@@ -17,6 +17,7 @@ import { assertSupportedBrregIdentity, fetchBrregEntity } from "./lib/brreg";
 import { validateAuthorityObligation } from "./lib/authority-permission";
 import { evaluateAnnualReadinessGates } from "./lib/annual-readiness";
 import { annualConfirmations, buildYearEndInterviewAnswers, noActivityConfirmed, yearEndAnswerKeys } from "./lib/annual-data";
+import { buildDeadlineReminderPlan, defaultReminderPreferences } from "./lib/deadlines";
 import { COMPANY_DOCUMENTS_BUCKET, documentStorageKey } from "./lib/documents";
 import {
   DividendReceivedValidationError,
@@ -391,6 +392,102 @@ export async function lockCompanyYear(formData: FormData) {
     category: "filing",
     action: "period_locked",
     message: `Inntektsår ${incomeYear} låst: ${reason}.`,
+  });
+
+  revalidatePath("/");
+  redirect("/");
+}
+
+export async function queueDeadlineReminders(formData: FormData) {
+  if (!hasSupabaseEnv()) {
+    redirect("/?error=Supabase%20env%20mangler");
+  }
+  const supabase = await createSupabaseServerClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+  if (!user?.email) {
+    redirect("/?error=Innlogging%20kreves");
+  }
+
+  const companyId = formString(formData, "companyId");
+  const incomeYear = Number(formString(formData, "incomeYear") || "2025");
+  const leadDays = formString(formData, "leadDays")
+    .split(",")
+    .map((value) => Number(value.trim()))
+    .filter((value) => Number.isInteger(value));
+  const selectedLeadDays = leadDays.length ? leadDays : [30, 7, 1, 0, -1];
+  const preferences = defaultReminderPreferences().map((preference) => ({
+    ...preference,
+    enabled: formData.get(`reminder_${preference.filing}`) === "on",
+    leadDays: selectedLeadDays,
+  }));
+
+  const { data: membership, error: membershipError } = await supabase
+    .from("company_memberships")
+    .select("company_id")
+    .eq("company_id", companyId)
+    .eq("user_id", user.id)
+    .eq("role", "owner")
+    .maybeSingle();
+  if (membershipError || !membership) {
+    redirect(`/?error=${encodeURIComponent(membershipError?.message ?? "Kun eier kan køe fristvarsler")}`);
+  }
+
+  const [
+    { data: submissions, error: submissionsError },
+    { data: readinessSnapshots, error: readinessError },
+    { data: notifications, error: notificationsError },
+  ] = await Promise.all([
+    supabase.from("filing_submissions").select("filing, income_year, mode, receipt_id, created_at, preview_confirmed_at").eq("company_id", companyId).eq("income_year", incomeYear),
+    supabase.from("filing_readiness_snapshots").select("obligation, income_year, ready, hard_blocks, status").eq("company_id", companyId).eq("income_year", incomeYear),
+    supabase.from("notification_outbox").select("template, payload, status").eq("company_id", companyId),
+  ]);
+  const firstError = submissionsError || readinessError || notificationsError;
+  if (firstError) {
+    redirect(`/?error=${encodeURIComponent(firstError.message)}`);
+  }
+
+  const plan = buildDeadlineReminderPlan({
+    incomeYear,
+    recipientEmail: user.email.toLowerCase(),
+    submissions: submissions ?? [],
+    readinessSnapshots: readinessSnapshots ?? [],
+    notifications: notifications ?? [],
+    preferences,
+  });
+  const queueable = plan.filter((candidate) => candidate.shouldQueue);
+  if (queueable.length) {
+    const { error: insertError } = await supabase.from("notification_outbox").insert(
+      queueable.map((candidate) => ({
+        company_id: companyId,
+        recipient_email: user.email!.toLowerCase(),
+        template: "deadline_reminder",
+        payload: {
+          dedupeKey: candidate.dedupeKey,
+          filing: candidate.filing,
+          obligation: candidate.obligation,
+          incomeYear: candidate.incomeYear,
+          deadline: candidate.deadline,
+          reminderKind: candidate.reminderKind,
+          subject: candidate.subject,
+          body: candidate.body,
+          readinessPath: candidate.readinessPath,
+        },
+        created_by: user.id,
+      })),
+    );
+    if (insertError) {
+      redirect(`/?error=${encodeURIComponent(insertError.message)}`);
+    }
+  }
+
+  await supabase.from("audit_events").insert({
+    company_id: companyId,
+    actor_id: user.id,
+    category: "filing",
+    action: "deadline_reminders_queued",
+    message: `${queueable.length} fristvarsler køet for ${incomeYear}.`,
   });
 
   revalidatePath("/");
