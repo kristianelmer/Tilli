@@ -6,6 +6,7 @@ export type SensitiveAction =
   | "document_download"
   | "archive_export"
   | "billing_admin"
+  | "company_cancel"
   | "company_delete";
 
 export type StepUpContext = {
@@ -96,6 +97,14 @@ export const sensitiveActionRequirements: StepUpRequirement[] = [
     requiresProductionCredentialsGate: false,
     maxMfaAgeMinutes: 15,
     label: "Billing-admin",
+  },
+  {
+    action: "company_cancel",
+    requiresMfa: true,
+    requiresSecurityReview: false,
+    requiresProductionCredentialsGate: false,
+    maxMfaAgeMinutes: 15,
+    label: "Kanseller selskap",
   },
   {
     action: "company_delete",

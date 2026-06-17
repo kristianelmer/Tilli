@@ -13,6 +13,7 @@ import {
   buildBillingAccount,
   productionBillingGate,
 } from "./lib/billing";
+import { buildCancellationEvidence, nextCancellationStatus } from "./lib/cancellation";
 import { assertSupportedBrregIdentity, fetchBrregEntity } from "./lib/brreg";
 import { validateAuthorityObligation } from "./lib/authority-permission";
 import { evaluateAnnualReadinessGates } from "./lib/annual-readiness";
@@ -2147,6 +2148,101 @@ export async function saveBillingAccount(formData: FormData) {
     action: "billing_account_saved",
     message: `Billingkonto lagret med ${account.pricing_plan}-prising.`,
   });
+
+  revalidatePath("/");
+  redirect("/");
+}
+
+export async function requestCompanyCancellation(formData: FormData) {
+  if (!hasSupabaseEnv()) {
+    redirect("/?error=Supabase%20env%20mangler");
+  }
+  const supabase = await createSupabaseServerClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+  if (!user) {
+    redirect("/?error=Innlogging%20kreves");
+  }
+
+  const companyId = formString(formData, "companyId");
+  const incomeYear = Number(formString(formData, "incomeYear") || "2025");
+  const reason = formString(formData, "reason") || "Kunde ønsker kansellering og arkiv før eventuell sletting.";
+
+  await requireSensitiveActionStepUp(supabase, user.id, companyId, "company_cancel");
+
+  const { data: membership } = await supabase
+    .from("company_memberships")
+    .select("role")
+    .eq("company_id", companyId)
+    .eq("user_id", user.id)
+    .eq("role", "owner")
+    .maybeSingle();
+  if (!membership) {
+    redirect("/?error=Kun%20eier%20kan%20be%20om%20kansellering");
+  }
+
+  const { data: documents, error: documentError } = await supabase
+    .from("documents")
+    .select("id, status")
+    .eq("company_id", companyId)
+    .eq("income_year", incomeYear);
+  if (documentError) {
+    redirect(`/?error=${encodeURIComponent(documentError.message)}`);
+  }
+
+  const archiveExportedAt = new Date().toISOString();
+  const evidence = buildCancellationEvidence({
+    companyId,
+    incomeYear,
+    archiveExportedAt,
+    missingDocumentIds: (documents ?? [])
+      .filter((document) => String(document.status ?? "").startsWith("missing"))
+      .map((document) => document.id),
+  });
+  const status = nextCancellationStatus({ archiveExportedAt });
+
+  const { data: existing } = await supabase
+    .from("company_cancellations")
+    .select("id")
+    .eq("company_id", companyId)
+    .neq("status", "deleted")
+    .order("updated_at", { ascending: false })
+    .limit(1)
+    .maybeSingle();
+
+  const payload = {
+    company_id: companyId,
+    status,
+    reason,
+    evidence,
+    requested_by: user.id,
+    requested_at: archiveExportedAt,
+    updated_at: archiveExportedAt,
+  };
+  const { error } = existing?.id
+    ? await supabase.from("company_cancellations").update(payload).eq("id", existing.id)
+    : await supabase.from("company_cancellations").insert(payload);
+  if (error) {
+    redirect(`/?error=${encodeURIComponent(error.message)}`);
+  }
+
+  await supabase.from("audit_events").insert([
+    {
+      company_id: companyId,
+      actor_id: user.id,
+      category: "archive",
+      action: "cancellation_archive_required",
+      message: `Kansellering krever arkiv for ${incomeYear}: ${evidence.archiveDownloadPath}.`,
+    },
+    {
+      company_id: companyId,
+      actor_id: user.id,
+      category: "retention",
+      action: "company_cancellation_requested",
+      message: `Kansellering satt i retention hold. Juridisk vurdering kreves før endelig sletting.`,
+    },
+  ]);
 
   revalidatePath("/");
   redirect("/");

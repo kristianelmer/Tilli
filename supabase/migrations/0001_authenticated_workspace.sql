@@ -99,6 +99,32 @@ create table if not exists public.audit_events (
   created_at timestamptz not null default now()
 );
 
+create table if not exists public.company_cancellations (
+  id uuid primary key default gen_random_uuid(),
+  company_id uuid not null references public.companies(id) on delete cascade,
+  status text not null default 'export_required' check (status in ('export_required', 'retention_hold', 'deletion_approved', 'deleted')),
+  reason text not null default '',
+  evidence jsonb not null default '{}'::jsonb,
+  requested_by uuid not null references auth.users(id) on delete restrict,
+  requested_at timestamptz not null default now(),
+  reviewed_by uuid references auth.users(id) on delete restrict,
+  reviewed_at timestamptz,
+  deleted_by uuid references auth.users(id) on delete restrict,
+  deleted_at timestamptz,
+  updated_at timestamptz not null default now()
+);
+
+alter table public.company_cancellations add column if not exists status text not null default 'export_required';
+alter table public.company_cancellations add column if not exists reason text not null default '';
+alter table public.company_cancellations add column if not exists evidence jsonb not null default '{}'::jsonb;
+alter table public.company_cancellations add column if not exists requested_by uuid references auth.users(id) on delete restrict;
+alter table public.company_cancellations add column if not exists requested_at timestamptz not null default now();
+alter table public.company_cancellations add column if not exists reviewed_by uuid references auth.users(id) on delete restrict;
+alter table public.company_cancellations add column if not exists reviewed_at timestamptz;
+alter table public.company_cancellations add column if not exists deleted_by uuid references auth.users(id) on delete restrict;
+alter table public.company_cancellations add column if not exists deleted_at timestamptz;
+alter table public.company_cancellations add column if not exists updated_at timestamptz not null default now();
+
 create table if not exists public.step_up_events (
   id uuid primary key default gen_random_uuid(),
   actor_id uuid not null references auth.users(id) on delete cascade,
@@ -422,12 +448,14 @@ create index if not exists filing_readiness_snapshots_company_year_idx on public
 create index if not exists filing_review_comments_preview_id_idx on public.filing_review_comments(preview_id, created_at);
 create index if not exists billing_accounts_updated_at_idx on public.billing_accounts(updated_at desc);
 create index if not exists authority_permissions_company_obligation_idx on public.authority_permissions(company_id, obligation);
+create index if not exists company_cancellations_company_updated_idx on public.company_cancellations(company_id, updated_at desc);
 
 alter table public.companies enable row level security;
 alter table public.company_memberships enable row level security;
 alter table public.company_invitations enable row level security;
 alter table public.notification_outbox enable row level security;
 alter table public.audit_events enable row level security;
+alter table public.company_cancellations enable row level security;
 alter table public.step_up_events enable row level security;
 alter table public.documents enable row level security;
 alter table public.opening_balance_setups enable row level security;
@@ -452,6 +480,7 @@ grant select, insert, update on public.company_memberships to authenticated;
 grant select, insert, update on public.company_invitations to authenticated;
 grant select, insert, update on public.notification_outbox to authenticated;
 grant select, insert on public.audit_events to authenticated;
+grant select, insert, update on public.company_cancellations to authenticated;
 grant select, insert on public.step_up_events to authenticated;
 grant select, insert on public.documents to authenticated;
 grant select, insert on public.opening_balance_setups to authenticated;
@@ -480,7 +509,16 @@ drop policy if exists "company members can read companies" on public.companies;
 create policy "company members can read companies"
 on public.companies for select
 to authenticated
-using (created_by = (select auth.uid()));
+using (
+  created_by = (select auth.uid())
+  or exists (
+    select 1
+    from public.company_memberships m
+    where m.company_id = companies.id
+      and m.user_id = (select auth.uid())
+      and m.accepted_at is not null
+  )
+);
 
 drop policy if exists "owners can lock their new company identity" on public.companies;
 create policy "owners can lock their new company identity"
@@ -669,6 +707,57 @@ with check (
         and m.user_id = (select auth.uid())
     )
   )
+);
+
+drop policy if exists "company members can read cancellation state" on public.company_cancellations;
+create policy "company members can read cancellation state"
+on public.company_cancellations for select
+to authenticated
+using (
+  exists (
+    select 1
+    from public.company_memberships m
+    where m.company_id = company_cancellations.company_id
+      and m.user_id = (select auth.uid())
+      and m.accepted_at is not null
+  )
+);
+
+drop policy if exists "owners can request cancellation" on public.company_cancellations;
+create policy "owners can request cancellation"
+on public.company_cancellations for insert
+to authenticated
+with check (
+  requested_by = (select auth.uid())
+  and status in ('export_required', 'retention_hold')
+  and exists (
+    select 1
+    from public.company_memberships m
+    where m.company_id = company_cancellations.company_id
+      and m.user_id = (select auth.uid())
+      and m.role = 'owner'
+      and m.accepted_at is not null
+  )
+);
+
+drop policy if exists "owners can update cancellation request" on public.company_cancellations;
+create policy "owners can update cancellation request"
+on public.company_cancellations for update
+to authenticated
+using (
+  exists (
+    select 1
+    from public.company_memberships m
+    where m.company_id = company_cancellations.company_id
+      and m.user_id = (select auth.uid())
+      and m.role = 'owner'
+      and m.accepted_at is not null
+  )
+)
+with check (
+  status in ('export_required', 'retention_hold')
+  and deleted_at is null
+  and deleted_by is null
 );
 
 drop policy if exists "users can read their own step up events" on public.step_up_events;

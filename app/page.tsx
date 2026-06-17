@@ -25,6 +25,7 @@ import {
   recordTaxSettlement,
   refreshAnnualReadinessSnapshots,
   resendWorkspaceInvitation,
+  requestCompanyCancellation,
   requestFilingPackagePayment,
   revokeWorkspaceInvitation,
   saveYearEndInterview,
@@ -35,6 +36,7 @@ import {
   uploadDocument,
 } from "./actions";
 import { productionBillingGate } from "./lib/billing";
+import { cancellationStatusLabel } from "./lib/cancellation";
 import {
   authorityObligationLabel,
   authorityObligations,
@@ -52,6 +54,7 @@ import {
   listAnnualData,
   listBankTransactions,
   listBillingAccounts,
+  listCompanyCancellations,
   listCompanyWorkspaces,
   listDocumentsForCompanies,
   listFilingPreviews,
@@ -102,6 +105,7 @@ export default async function Home({ searchParams }: HomeProps) {
   const { authorityPermissions } = user ? await listAuthorityPermissions(companies.map((company) => company.id)) : { authorityPermissions: [] };
   const { invitations } = user ? await listWorkspaceInvitations(companies.map((company) => company.id)) : { invitations: [] };
   const { notifications } = user ? await listNotificationOutbox(companies.map((company) => company.id)) : { notifications: [] };
+  const { cancellations } = user ? await listCompanyCancellations(companies.map((company) => company.id)) : { cancellations: [] };
   const { billingAccounts } = user ? await listBillingAccounts(companies.map((company) => company.id)) : { billingAccounts: [] };
   const { transactions } = user ? await listBankTransactions(companies.map((company) => company.id)) : { transactions: [] };
   const { actions } = user ? await listHoldingActions(companies.map((company) => company.id)) : { actions: [] };
@@ -152,6 +156,7 @@ export default async function Home({ searchParams }: HomeProps) {
   const primaryAuthorityPermissions = authorityPermissions.filter((permission) => permission.company_id === primaryCompanyId);
   const primaryInvitations = invitations.filter((invitation) => invitation.company_id === primaryCompanyId);
   const primaryNotifications = notifications.filter((notification) => notification.company_id === primaryCompanyId);
+  const primaryCancellation = cancellations.find((cancellation) => cancellation.company_id === primaryCompanyId);
   const reviewChecklist = reviewChecklistStatus(
     comments
       .filter((comment) => comment.company_id === primaryCompanyId)
@@ -413,6 +418,58 @@ export default async function Home({ searchParams }: HomeProps) {
                     </div>
                   ))}
                 </div>
+              </section>
+
+              <section className="band">
+                <div className="sectionHeader">
+                  <p className="eyebrow">Kansellering</p>
+                  <h2>Arkiv først, retention hold før sletting.</h2>
+                </div>
+                <div className="readinessGrid">
+                  <div className="readinessItem">
+                    <span>Arkiveksport</span>
+                    <strong data-status={primaryCancellation?.evidence?.archiveExportedAt ? "ready" : "warning"}>
+                      {primaryCancellation?.evidence?.archiveExportedAt ? "Registrert" : "Påkrevd"}
+                    </strong>
+                    <p>
+                      {primaryCancellation?.evidence?.archiveDownloadPath
+                        ? `Arkivsti: ${primaryCancellation.evidence.archiveDownloadPath}`
+                        : "Eksporter selskapsarkiv før destruktive handlinger."}
+                    </p>
+                  </div>
+                  <div className="readinessItem">
+                    <span>Status</span>
+                    <strong data-status={primaryCancellation ? "warning" : "draft"}>
+                      {primaryCancellation ? cancellationStatusLabel(primaryCancellation.status) : "Ingen forespørsel"}
+                    </strong>
+                    <p>
+                      {primaryCancellation
+                        ? "Endelig sletting krever retention-vurdering og juridisk/sikkerhetsmessig godkjenning."
+                        : "Selskapet er aktivt. Kansellering oppretter retention hold, ikke umiddelbar sletting."}
+                    </p>
+                  </div>
+                  <div className="readinessItem">
+                    <span>Retained classes</span>
+                    <strong data-status="warning">Lovpålagt vurdering</strong>
+                    <p>
+                      {primaryCancellation?.evidence?.retentionClasses?.join(", ") ??
+                        "Dokumenter, ledger, filingkvitteringer, billing og audit kan måtte beholdes."}
+                    </p>
+                  </div>
+                </div>
+                {primaryCompanyId ? (
+                  <form className="dataPanel formPanel widePanel" action={requestCompanyCancellation}>
+                    <input name="companyId" type="hidden" value={primaryCompanyId} />
+                    <input name="incomeYear" type="hidden" value={primaryIncomeYear} />
+                    <label>
+                      Begrunnelse
+                      <input name="reason" defaultValue="Kunde ønsker kansellering og arkiv før eventuell sletting." />
+                    </label>
+                    <button className="secondaryButton" type="submit">
+                      Be om kansellering
+                    </button>
+                  </form>
+                ) : null}
               </section>
 
               <section className="band mutedBand">

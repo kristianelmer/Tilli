@@ -7,6 +7,7 @@ import type {
   AnnualReadinessIssue,
   AnnualReadinessStatus,
 } from "../annual-readiness";
+import type { CancellationEvidence, CancellationStatus } from "../cancellation";
 import type {
   Rf1086ReceiptMetadata,
   Rf1086SubmissionFeedbackItem,
@@ -307,6 +308,21 @@ export type NotificationOutboxRow = {
   status: "queued" | "sent" | "failed";
   created_by: string;
   created_at: string;
+};
+
+export type CompanyCancellationRow = {
+  id: string;
+  company_id: string;
+  status: CancellationStatus;
+  reason: string;
+  evidence: CancellationEvidence;
+  requested_by: string;
+  requested_at: string;
+  reviewed_by: string | null;
+  reviewed_at: string | null;
+  deleted_by: string | null;
+  deleted_at: string | null;
+  updated_at: string;
 };
 
 export function hasSupabaseEnv() {
@@ -653,6 +669,23 @@ export async function listNotificationOutbox(companyIds: string[]) {
 
   return {
     notifications: (data ?? []) as NotificationOutboxRow[],
+    error: error?.message ?? null,
+  };
+}
+
+export async function listCompanyCancellations(companyIds: string[]) {
+  if (!hasSupabaseEnv() || companyIds.length === 0) {
+    return { cancellations: [] as CompanyCancellationRow[], error: null };
+  }
+  const supabase = await createSupabaseServerClient();
+  const { data, error } = await supabase
+    .from("company_cancellations")
+    .select("id, company_id, status, reason, evidence, requested_by, requested_at, reviewed_by, reviewed_at, deleted_by, deleted_at, updated_at")
+    .in("company_id", companyIds)
+    .order("updated_at", { ascending: false });
+
+  return {
+    cancellations: (data ?? []) as CompanyCancellationRow[],
     error: error?.message ?? null,
   };
 }
