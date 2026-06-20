@@ -34,7 +34,7 @@ The rehearsal command covers:
 - archive and backup/restore;
 - security step-up;
 - filing release gates;
-- launch copy and legal policy guards.
+- launch copy, launch signoff, and legal policy guards.
 
 ## Manual Rehearsal Checklist
 
@@ -52,7 +52,7 @@ The rehearsal command covers:
 | Operator support | `npm run test:operator-support` | Automated read-only summary |
 | Backup/restore | `npm run test:backup-restore` | Automated fixture restore; real restore target still needs reviewer record |
 | Security | `npm run test:security` | Automated step-up gate |
-| Launch copy/legal | `npm run test:launch-copy`, `npm run test:legal-policy` | Automated copy/policy guard; legal signoff pending |
+| Launch copy/legal | `npm run test:launch-copy`, `npm run test:launch-signoff`, `npm run test:legal-policy` | Automated copy/policy/signoff guard; legal signoff pending |
 
 ## Filing Gate State
 
@@ -67,7 +67,10 @@ test-environment evidence and named human release signoff exist.
 
 ## Required Human Signoffs
 
-Record reviewer, date, evidence link, decision:
+Record reviewer, date, evidence link, decision. The machine-checkable model is
+`app/lib/launch-signoff.ts`; it blocks launch unless every required decision is
+approved with reviewer, date, evidence link, and decision text. The
+`security_restore` signoff must be 30 days old or newer.
 
 | Decision | Reviewer | Date | Evidence link | Decision |
 | --- | --- | --- | --- | --- |

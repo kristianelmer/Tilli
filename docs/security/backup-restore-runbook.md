@@ -48,3 +48,11 @@ Automated coverage:
 
 - `npm run test:backup-restore`
 - `npm run test:archive`
+
+Machine-checkable signoff gate:
+
+- Implementation: `app/lib/launch-signoff.ts`
+- Test: `npm run test:launch-signoff`
+- Required key: `security_restore`
+- Closure rule: reviewer, review date, evidence link, and decision must be
+  recorded as `approved`; the review date must be 30 days old or newer.

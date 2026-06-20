@@ -7,6 +7,15 @@ Blocks: #71 remains open until human/legal signoff
 This register turns `docs/launch/clearance-checklist.md` into a reviewable
 evidence log. It is not trademark clearance.
 
+Machine-checkable signoff gate:
+
+- Implementation: `app/lib/launch-signoff.ts`
+- Test: `npm run test:launch-signoff`
+- Required key for this issue: `launch_legal_name_public_copy`
+- Closure rule: reviewer, review date, evidence link, and decision must be
+  recorded as `approved`. Pending, rejected, incomplete, or stale evidence keeps
+  #71 open.
+
 ## Search Sources
 
 Official/manual sources to use for final review:
