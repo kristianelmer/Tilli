@@ -126,3 +126,21 @@ export function buildCancellationLifecycle(cancellation: Pick<CompanyCancellatio
     },
   ];
 }
+
+export function buildDeletionCompletionUpdate(input: {
+  actorId: string;
+  reviewedAt: string;
+  deletedAt: string;
+}) {
+  if (!input.actorId) {
+    throw new Error("missing_deletion_actor");
+  }
+  return {
+    status: "deleted" as const,
+    reviewed_by: input.actorId,
+    reviewed_at: input.reviewedAt,
+    deleted_by: input.actorId,
+    deleted_at: input.deletedAt,
+    updated_at: input.deletedAt,
+  };
+}

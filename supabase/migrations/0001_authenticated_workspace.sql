@@ -832,9 +832,18 @@ using (
   )
 )
 with check (
-  status in ('export_required', 'retention_hold')
-  and deleted_at is null
-  and deleted_by is null
+  (
+    status in ('export_required', 'retention_hold')
+    and deleted_at is null
+    and deleted_by is null
+  )
+  or (
+    status = 'deleted'
+    and reviewed_by = (select auth.uid())
+    and reviewed_at is not null
+    and deleted_by = (select auth.uid())
+    and deleted_at is not null
+  )
 );
 
 drop policy if exists "users can read their own step up events" on public.step_up_events;

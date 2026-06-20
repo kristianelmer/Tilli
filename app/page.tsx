@@ -5,6 +5,7 @@ import {
   addFilingReviewComment,
   acceptWorkspaceInvitation,
   cancelBillingSubscription,
+  completeCompanyDeletionRecord,
   confirmAuthorityPermission,
   confirmSimulatedRf1086Submission,
   createOpeningBalanceSetup,
@@ -486,6 +487,19 @@ export default async function Home({ searchParams }: HomeProps) {
                     </label>
                     <button className="secondaryButton" type="submit">
                       Be om kansellering
+                    </button>
+                  </form>
+                ) : null}
+                {primaryCancellation && primaryCancellation.status !== "deleted" ? (
+                  <form className="dataPanel formPanel widePanel" action={completeCompanyDeletionRecord}>
+                    <input name="companyId" type="hidden" value={primaryCancellation.company_id} />
+                    <input name="cancellationId" type="hidden" value={primaryCancellation.id} />
+                    <label className="checkboxLabel">
+                      <input name="legalRetentionConfirmed" type="checkbox" />
+                      Retention/legal review er bekreftet, pliktige records beholdes, fysisk sletting gjøres ikke her.
+                    </label>
+                    <button className="secondaryButton" type="submit">
+                      Fullfør slettestatus
                     </button>
                   </form>
                 ) : null}

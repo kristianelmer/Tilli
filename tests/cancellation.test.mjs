@@ -4,6 +4,7 @@ import test from "node:test";
 import {
   buildCancellationEvidence,
   buildCancellationLifecycle,
+  buildDeletionCompletionUpdate,
   cancellationStatusLabel,
   nextCancellationStatus,
   retentionClasses,
@@ -65,4 +66,26 @@ test("shows explicit export, soft-delete, retention, and final deletion lifecycl
     }),
   });
   assert.deepEqual(deleted.map((item) => item.state), ["done", "done", "done", "done"]);
+});
+
+test("builds retained deletion completion update with reviewer and actor", () => {
+  assert.throws(
+    () => buildDeletionCompletionUpdate({ actorId: "", reviewedAt: "2026-06-17T10:00:00.000Z", deletedAt: "2026-06-17T11:00:00.000Z" }),
+    /missing_deletion_actor/,
+  );
+  assert.deepEqual(
+    buildDeletionCompletionUpdate({
+      actorId: "owner-id",
+      reviewedAt: "2026-06-17T10:00:00.000Z",
+      deletedAt: "2026-06-17T11:00:00.000Z",
+    }),
+    {
+      status: "deleted",
+      reviewed_by: "owner-id",
+      reviewed_at: "2026-06-17T10:00:00.000Z",
+      deleted_by: "owner-id",
+      deleted_at: "2026-06-17T11:00:00.000Z",
+      updated_at: "2026-06-17T11:00:00.000Z",
+    },
+  );
 });

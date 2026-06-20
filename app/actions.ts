@@ -16,7 +16,7 @@ import {
   productionBillingGate,
   simulateBillingProviderEvent,
 } from "./lib/billing";
-import { buildCancellationEvidence, nextCancellationStatus } from "./lib/cancellation";
+import { buildCancellationEvidence, buildDeletionCompletionUpdate, nextCancellationStatus } from "./lib/cancellation";
 import { assertSupportedBrregIdentity, fetchBrregEntity } from "./lib/brreg";
 import { validateAuthorityObligation } from "./lib/authority-permission";
 import { evaluateAnnualReadinessGates } from "./lib/annual-readiness";
@@ -2244,6 +2244,84 @@ export async function requestCompanyCancellation(formData: FormData) {
       category: "retention",
       action: "company_cancellation_requested",
       message: `Kansellering satt i retention hold. Juridisk vurdering kreves før endelig sletting.`,
+    },
+  ]);
+
+  revalidatePath("/");
+  redirect("/");
+}
+
+export async function completeCompanyDeletionRecord(formData: FormData) {
+  if (!hasSupabaseEnv()) {
+    redirect("/?error=Supabase%20env%20mangler");
+  }
+  const supabase = await createSupabaseServerClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+  if (!user) {
+    redirect("/?error=Innlogging%20kreves");
+  }
+
+  const companyId = formString(formData, "companyId");
+  const cancellationId = formString(formData, "cancellationId");
+  const legalRetentionConfirmed = formData.get("legalRetentionConfirmed") === "on";
+  if (!legalRetentionConfirmed) {
+    redirect("/?error=Retention%20og%20legal%20review%20m%C3%A5%20bekreftes");
+  }
+
+  await requireSensitiveActionStepUp(supabase, user.id, companyId, "company_delete");
+
+  const { data: cancellation, error: cancellationError } = await supabase
+    .from("company_cancellations")
+    .select("id, company_id, status, evidence")
+    .eq("id", cancellationId)
+    .eq("company_id", companyId)
+    .single();
+  if (cancellationError || !cancellation) {
+    redirect(`/?error=${encodeURIComponent(cancellationError?.message ?? "Kanselleringssak mangler")}`);
+  }
+  if (!cancellation.evidence?.archiveExportedAt) {
+    redirect("/?error=Arkiv%20m%C3%A5%20registreres%20f%C3%B8r%20sletting");
+  }
+  if (cancellation.status === "deleted") {
+    redirect("/?error=Selskapet%20er%20allerede%20markert%20slettet");
+  }
+
+  const now = new Date().toISOString();
+  const deletionUpdate = buildDeletionCompletionUpdate({
+    actorId: user.id,
+    reviewedAt: now,
+    deletedAt: now,
+  });
+  const { error } = await supabase
+    .from("company_cancellations")
+    .update(deletionUpdate)
+    .eq("id", cancellationId)
+    .eq("company_id", companyId);
+  if (error) {
+    redirect(`/?error=${encodeURIComponent(error.message)}`);
+  }
+
+  await supabase
+    .from("companies")
+    .update({ status_text: "deleted_retention_record" })
+    .eq("id", companyId);
+
+  await supabase.from("audit_events").insert([
+    {
+      company_id: companyId,
+      actor_id: user.id,
+      category: "retention",
+      action: "retention_decision_approved",
+      message: "Retention/legal review bekreftet før endelig slettestatus.",
+    },
+    {
+      company_id: companyId,
+      actor_id: user.id,
+      category: "retention",
+      action: "company_deletion_completed",
+      message: "Selskapet er markert slettet med beholdte retention-records.",
     },
   ]);
 
