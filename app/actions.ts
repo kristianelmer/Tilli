@@ -18,6 +18,7 @@ import {
 } from "./lib/billing";
 import { buildCancellationEvidence, buildDeletionCompletionUpdate, nextCancellationStatus } from "./lib/cancellation";
 import { assertSupportedBrregIdentity, fetchBrregEntity } from "./lib/brreg";
+import { buildAuthorityTestRun, type AuthorityTestRunEnvironment, type AuthorityTestRunStatus } from "./lib/authority-test-evidence";
 import { validateAuthorityObligation } from "./lib/authority-permission";
 import { evaluateAnnualReadinessGates } from "./lib/annual-readiness";
 import { annualConfirmations, buildYearEndInterviewAnswers, noActivityConfirmed, yearEndAnswerKeys } from "./lib/annual-data";
@@ -2891,6 +2892,68 @@ export async function confirmAuthorityPermission(formData: FormData) {
     category: "submission",
     action: "authority_permission_confirmed",
     message: `Innsendingsrett bekreftet for ${obligation}. Produksjonsgate: ${productionEnabled ? "aktiv" : "av"}.`,
+  });
+
+  revalidatePath("/");
+  redirect("/");
+}
+
+export async function recordAuthorityTestEvidence(formData: FormData) {
+  if (!hasSupabaseEnv()) {
+    redirect("/?error=Supabase%20env%20mangler");
+  }
+  const supabase = await createSupabaseServerClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+  if (!user) {
+    redirect("/?error=Innlogging%20kreves");
+  }
+
+  const companyId = formString(formData, "companyId");
+  await requireSensitiveActionStepUp(supabase, user.id, companyId, "confirm_authority");
+  let obligation;
+  try {
+    obligation = validateAuthorityObligation(formString(formData, "obligation"));
+  } catch (error) {
+    redirect(`/?error=${encodeURIComponent(error instanceof Error ? error.message : "Ugyldig myndighetsplikt")}`);
+  }
+
+  const environment = formString(formData, "environment") as AuthorityTestRunEnvironment;
+  if (!["test", "manual_evidence"].includes(environment)) {
+    redirect("/?error=Ugyldig%20testmilj%C3%B8");
+  }
+  const status = formString(formData, "status") as AuthorityTestRunStatus;
+  let record;
+  try {
+    record = buildAuthorityTestRun({
+      companyId,
+      obligation,
+      environment,
+      status,
+      testReference: formString(formData, "testReference"),
+      feedbackSummary: formString(formData, "feedbackSummary"),
+      receiptReference: formString(formData, "receiptReference"),
+      archiveReference: formString(formData, "archiveReference"),
+      evidenceUrl: formString(formData, "evidenceUrl"),
+      payloadHash: formString(formData, "payloadHash"),
+      recordedBy: user.id,
+    });
+  } catch (error) {
+    redirect(`/?error=${encodeURIComponent(error instanceof Error ? error.message : "Ugyldig test-evidens")}`);
+  }
+
+  const { error } = await supabase.from("authority_test_runs").insert(record);
+  if (error) {
+    redirect(`/?error=${encodeURIComponent(error.message)}`);
+  }
+
+  await supabase.from("audit_events").insert({
+    company_id: companyId,
+    actor_id: user.id,
+    category: "submission",
+    action: "authority_test_evidence_recorded",
+    message: `${obligation} test-evidens registrert som ${status} med ref ${record.test_reference}.`,
   });
 
   revalidatePath("/");

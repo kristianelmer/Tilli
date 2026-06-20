@@ -456,6 +456,22 @@ create table if not exists public.authority_permissions (
   check (submitter_user_id = confirmed_by)
 );
 
+create table if not exists public.authority_test_runs (
+  id uuid primary key default gen_random_uuid(),
+  company_id uuid not null references public.companies(id) on delete cascade,
+  obligation text not null check (obligation in ('aksjonaerregisteroppgaven', 'skattemelding', 'aarsregnskap')),
+  environment text not null default 'test' check (environment in ('test', 'manual_evidence')),
+  status text not null check (status in ('accepted', 'rejected', 'blocked', 'pending')),
+  test_reference text not null check (test_reference <> ''),
+  feedback_summary text not null default '',
+  receipt_reference text,
+  archive_reference text,
+  evidence_url text,
+  payload_hash text,
+  recorded_by uuid not null references auth.users(id) on delete restrict,
+  recorded_at timestamptz not null default now()
+);
+
 create index if not exists companies_created_by_idx on public.companies(created_by);
 create index if not exists company_memberships_user_id_idx on public.company_memberships(user_id);
 create index if not exists support_operators_active_idx on public.support_operators(active);
@@ -483,6 +499,7 @@ create index if not exists filing_review_comments_preview_id_idx on public.filin
 create index if not exists billing_accounts_updated_at_idx on public.billing_accounts(updated_at desc);
 create index if not exists billing_payment_events_company_created_idx on public.billing_payment_events(company_id, created_at desc);
 create index if not exists authority_permissions_company_obligation_idx on public.authority_permissions(company_id, obligation);
+create index if not exists authority_test_runs_company_obligation_idx on public.authority_test_runs(company_id, obligation, recorded_at desc);
 create index if not exists company_cancellations_company_updated_idx on public.company_cancellations(company_id, updated_at desc);
 
 alter table public.companies enable row level security;
@@ -510,6 +527,7 @@ alter table public.filing_review_comments enable row level security;
 alter table public.billing_accounts enable row level security;
 alter table public.billing_payment_events enable row level security;
 alter table public.authority_permissions enable row level security;
+alter table public.authority_test_runs enable row level security;
 
 grant usage on schema public to authenticated;
 grant select, insert, update on public.companies to authenticated;
@@ -537,6 +555,7 @@ grant select, insert, update on public.filing_review_comments to authenticated;
 grant select, insert, update on public.billing_accounts to authenticated;
 grant select, insert on public.billing_payment_events to authenticated;
 grant select, insert, update on public.authority_permissions to authenticated;
+grant select, insert on public.authority_test_runs to authenticated;
 
 drop policy if exists "owners can create companies" on public.companies;
 create policy "owners can create companies"
@@ -1638,6 +1657,47 @@ with check (
     select 1
     from public.company_memberships m
     where m.company_id = authority_permissions.company_id
+      and m.user_id = (select auth.uid())
+      and m.role = 'owner'
+  )
+);
+
+drop policy if exists "company members can read authority test runs" on public.authority_test_runs;
+create policy "company members can read authority test runs"
+on public.authority_test_runs for select
+to authenticated
+using (
+  exists (
+    select 1
+    from public.company_memberships m
+    where m.company_id = authority_test_runs.company_id
+      and m.user_id = (select auth.uid())
+  )
+);
+
+drop policy if exists "support operators can read authority test runs" on public.authority_test_runs;
+create policy "support operators can read authority test runs"
+on public.authority_test_runs for select
+to authenticated
+using (
+  exists (
+    select 1
+    from public.support_operators o
+    where o.user_id = (select auth.uid())
+      and o.active
+  )
+);
+
+drop policy if exists "owners can create authority test runs" on public.authority_test_runs;
+create policy "owners can create authority test runs"
+on public.authority_test_runs for insert
+to authenticated
+with check (
+  recorded_by = (select auth.uid())
+  and exists (
+    select 1
+    from public.company_memberships m
+    where m.company_id = authority_test_runs.company_id
       and m.user_id = (select auth.uid())
       and m.role = 'owner'
   )

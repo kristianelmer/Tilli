@@ -300,6 +300,22 @@ export type AuthorityPermissionRow = {
   updated_at: string;
 };
 
+export type AuthorityTestRunRow = {
+  id: string;
+  company_id: string;
+  obligation: "aksjonaerregisteroppgaven" | "skattemelding" | "aarsregnskap";
+  environment: "test" | "manual_evidence";
+  status: "accepted" | "rejected" | "blocked" | "pending";
+  test_reference: string;
+  feedback_summary: string;
+  receipt_reference: string | null;
+  archive_reference: string | null;
+  evidence_url: string | null;
+  payload_hash: string | null;
+  recorded_by: string;
+  recorded_at: string;
+};
+
 export type WorkspaceInvitationRow = {
   id: string;
   company_id: string;
@@ -673,6 +689,23 @@ export async function listAuthorityPermissions(companyIds: string[]) {
 
   return {
     authorityPermissions: (data ?? []) as AuthorityPermissionRow[],
+    error: error?.message ?? null,
+  };
+}
+
+export async function listAuthorityTestRuns(companyIds: string[]) {
+  if (!hasSupabaseEnv() || companyIds.length === 0) {
+    return { authorityTestRuns: [] as AuthorityTestRunRow[], error: null };
+  }
+  const supabase = await createSupabaseServerClient();
+  const { data, error } = await supabase
+    .from("authority_test_runs")
+    .select("id, company_id, obligation, environment, status, test_reference, feedback_summary, receipt_reference, archive_reference, evidence_url, payload_hash, recorded_by, recorded_at")
+    .in("company_id", companyIds)
+    .order("recorded_at", { ascending: false });
+
+  return {
+    authorityTestRuns: (data ?? []) as AuthorityTestRunRow[],
     error: error?.message ?? null,
   };
 }

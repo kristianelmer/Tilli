@@ -19,6 +19,7 @@ import {
   postManualJournal,
   queueDeadlineReminders,
   recordAdminCost,
+  recordAuthorityTestEvidence,
   recordDividendReceived,
   recordOwnerDividend,
   recordSharePurchase,
@@ -39,6 +40,7 @@ import {
 } from "./actions";
 import { productionBillingGate } from "./lib/billing";
 import { buildCancellationLifecycle, cancellationStatusLabel } from "./lib/cancellation";
+import { authorityTestEvidenceGate } from "./lib/authority-test-evidence";
 import {
   authorityObligationLabel,
   authorityObligations,
@@ -53,6 +55,7 @@ import {
   getCurrentUser,
   hasSupabaseEnv,
   listAuthorityPermissions,
+  listAuthorityTestRuns,
   listAnnualData,
   listBankTransactions,
   listBillingAccounts,
@@ -107,6 +110,7 @@ export default async function Home({ searchParams }: HomeProps) {
   const { readinessSnapshots } = user ? await listFilingReadinessSnapshots(companies.map((company) => company.id)) : { readinessSnapshots: [] };
   const { comments } = user ? await listFilingReviewComments(companies.map((company) => company.id)) : { comments: [] };
   const { authorityPermissions } = user ? await listAuthorityPermissions(companies.map((company) => company.id)) : { authorityPermissions: [] };
+  const { authorityTestRuns } = user ? await listAuthorityTestRuns(companies.map((company) => company.id)) : { authorityTestRuns: [] };
   const { invitations } = user ? await listWorkspaceInvitations(companies.map((company) => company.id)) : { invitations: [] };
   const { notifications } = user ? await listNotificationOutbox(companies.map((company) => company.id)) : { notifications: [] };
   const { cancellations } = user ? await listCompanyCancellations(companies.map((company) => company.id)) : { cancellations: [] };
@@ -164,6 +168,7 @@ export default async function Home({ searchParams }: HomeProps) {
   );
   const primaryBillingGate = primaryBillingAccount ? productionBillingGate(primaryBillingAccount, primaryFilingReady) : null;
   const primaryAuthorityPermissions = authorityPermissions.filter((permission) => permission.company_id === primaryCompanyId);
+  const primaryAuthorityTestRuns = authorityTestRuns.filter((run) => run.company_id === primaryCompanyId);
   const primaryInvitations = invitations.filter((invitation) => invitation.company_id === primaryCompanyId);
   const primaryNotifications = notifications.filter((notification) => notification.company_id === primaryCompanyId);
   const primaryCancellation = cancellations.find((cancellation) => cancellation.company_id === primaryCompanyId);
@@ -1162,15 +1167,82 @@ export default async function Home({ searchParams }: HomeProps) {
                   </button>
                   <p>Dette lagrer bare rettighetsbekreftelse. Ingen live innsending utføres her.</p>
                 </form>
+                <form className="dataPanel formPanel widePanel" action={recordAuthorityTestEvidence}>
+                  <input name="companyId" type="hidden" value={primaryCompanyId} />
+                  <label>
+                    Plikt
+                    <select name="obligation" defaultValue="aksjonaerregisteroppgaven">
+                      {authorityObligations.map((obligation) => (
+                        <option key={obligation} value={obligation}>
+                          {authorityObligationLabel(obligation)}
+                        </option>
+                      ))}
+                    </select>
+                  </label>
+                  <label>
+                    Miljø
+                    <select name="environment" defaultValue="test">
+                      <option value="test">Myndighet testmiljø</option>
+                      <option value="manual_evidence">Manuell evidens</option>
+                    </select>
+                  </label>
+                  <label>
+                    Status
+                    <select name="status" defaultValue="accepted">
+                      <option value="accepted">Akseptert</option>
+                      <option value="pending">Venter</option>
+                      <option value="rejected">Avvist</option>
+                      <option value="blocked">Blokkert</option>
+                    </select>
+                  </label>
+                  <label>
+                    Testreferanse
+                    <input name="testReference" placeholder="Altinn test-id, saksref eller manuell evidensref" required />
+                  </label>
+                  <label>
+                    Kvitteringsref
+                    <input name="receiptReference" placeholder="receipt-..." />
+                  </label>
+                  <label>
+                    Arkivref
+                    <input name="archiveReference" placeholder="archive-..." />
+                  </label>
+                  <label>
+                    Evidens-URL
+                    <input name="evidenceUrl" placeholder="https://..." />
+                  </label>
+                  <label>
+                    Payload hash
+                    <input name="payloadHash" placeholder="sha256:..." />
+                  </label>
+                  <label>
+                    Feedback
+                    <textarea name="feedbackSummary" placeholder="Kort myndighetsfeedback eller blokkering" />
+                  </label>
+                  <button className="secondaryButton" type="submit">
+                    Lagre test-evidens
+                  </button>
+                  <p>Dette dokumenterer test/feedback. Produksjon krever fortsatt separat release gate.</p>
+                </form>
                 <div className="readinessGrid">
                   {authorityObligations.map((obligation) => {
                     const gate = productionAuthorityGate(primaryAuthorityPermissions, obligation);
+                    const evidenceGate = authorityTestEvidenceGate(primaryAuthorityTestRuns, obligation);
                     const permission = primaryAuthorityPermissions.find((item) => item.obligation === obligation);
+                    const latestRun = primaryAuthorityTestRuns.find((item) => item.obligation === obligation);
                     return (
                       <div className="readinessItem" key={obligation}>
                         <span>{authorityObligationLabel(obligation)}</span>
                         <strong data-status={gate.allowed ? "ready" : permission ? "warning" : "draft"}>{gate.status}</strong>
                         <p>{gate.message}</p>
+                        <p>Test-evidens: {evidenceGate.status}</p>
+                        <p>{evidenceGate.message}</p>
+                        <p>
+                          Siste testref:{" "}
+                          {latestRun
+                            ? `${latestRun.test_reference} (${latestRun.status})`
+                            : "Ingen"}
+                        </p>
                         <p>
                           Bekreftet:{" "}
                           {permission?.confirmed_at ? new Date(permission.confirmed_at).toLocaleString("nb-NO") : "Nei"}
