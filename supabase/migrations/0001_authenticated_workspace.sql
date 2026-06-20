@@ -43,6 +43,27 @@ create table if not exists public.support_operators (
   created_at timestamptz not null default now()
 );
 
+create table if not exists public.launch_signoffs (
+  key text primary key check (key in (
+    'launch_legal_name_public_copy',
+    'legal_policy_pack',
+    'security_restore',
+    'billing_refund',
+    'rf1086_authority',
+    'annual_accounts_authority',
+    'tax_return_authority',
+    'support_rollback'
+  )),
+  status text not null check (status in ('approved', 'rejected', 'pending')),
+  reviewer text not null default '',
+  reviewed_at timestamptz not null,
+  evidence_link text not null default '',
+  decision text not null default '',
+  recorded_by uuid not null references auth.users(id) on delete restrict,
+  updated_at timestamptz not null default now(),
+  check (status <> 'approved' or (reviewer <> '' and evidence_link <> '' and decision <> ''))
+);
+
 alter table public.company_memberships add column if not exists accepted_at timestamptz;
 alter table public.company_memberships add column if not exists created_at timestamptz not null default now();
 
@@ -93,6 +114,20 @@ as $$
       and i.status = 'pending'
       and i.expires_at > now()
       and i.invited_email = lower(coalesce((auth.jwt() ->> 'email'), ''))
+  );
+$$;
+
+create or replace function public.is_company_creator(target_company_id uuid)
+returns boolean
+language sql
+security definer
+set search_path = public
+as $$
+  select exists (
+    select 1
+    from public.companies c
+    where c.id = target_company_id
+      and c.created_by = (select auth.uid())
   );
 $$;
 
@@ -475,6 +510,7 @@ create table if not exists public.authority_test_runs (
 create index if not exists companies_created_by_idx on public.companies(created_by);
 create index if not exists company_memberships_user_id_idx on public.company_memberships(user_id);
 create index if not exists support_operators_active_idx on public.support_operators(active);
+create index if not exists launch_signoffs_updated_idx on public.launch_signoffs(updated_at desc);
 create index if not exists company_invitations_company_status_idx on public.company_invitations(company_id, status, updated_at desc);
 create index if not exists company_invitations_invited_email_idx on public.company_invitations(invited_email, status);
 create index if not exists notification_outbox_company_created_idx on public.notification_outbox(company_id, created_at desc);
@@ -505,6 +541,7 @@ create index if not exists company_cancellations_company_updated_idx on public.c
 alter table public.companies enable row level security;
 alter table public.company_memberships enable row level security;
 alter table public.support_operators enable row level security;
+alter table public.launch_signoffs enable row level security;
 alter table public.company_invitations enable row level security;
 alter table public.notification_outbox enable row level security;
 alter table public.audit_events enable row level security;
@@ -533,6 +570,9 @@ grant usage on schema public to authenticated;
 grant select, insert, update on public.companies to authenticated;
 grant select, insert, update on public.company_memberships to authenticated;
 grant select on public.support_operators to authenticated;
+grant select, insert, update on public.launch_signoffs to authenticated;
+grant execute on function public.can_accept_company_invitation(uuid, text) to authenticated;
+grant execute on function public.is_company_creator(uuid) to authenticated;
 grant select, insert, update on public.company_invitations to authenticated;
 grant select, insert, update on public.notification_outbox to authenticated;
 grant select, insert on public.audit_events to authenticated;
@@ -590,6 +630,58 @@ on public.support_operators for select
 to authenticated
 using (user_id = (select auth.uid()) and active);
 
+drop policy if exists "active operators can read launch signoffs" on public.launch_signoffs;
+create policy "active operators can read launch signoffs"
+on public.launch_signoffs for select
+to authenticated
+using (
+  exists (
+    select 1
+    from public.support_operators o
+    where o.user_id = (select auth.uid())
+      and o.active
+  )
+);
+
+drop policy if exists "admin operators can create launch signoffs" on public.launch_signoffs;
+create policy "admin operators can create launch signoffs"
+on public.launch_signoffs for insert
+to authenticated
+with check (
+  recorded_by = (select auth.uid())
+  and exists (
+    select 1
+    from public.support_operators o
+    where o.user_id = (select auth.uid())
+      and o.role = 'admin'
+      and o.active
+  )
+);
+
+drop policy if exists "admin operators can update launch signoffs" on public.launch_signoffs;
+create policy "admin operators can update launch signoffs"
+on public.launch_signoffs for update
+to authenticated
+using (
+  exists (
+    select 1
+    from public.support_operators o
+    where o.user_id = (select auth.uid())
+      and o.role = 'admin'
+      and o.active
+  )
+)
+with check (
+  recorded_by = (select auth.uid())
+  and exists (
+    select 1
+    from public.support_operators o
+    where o.user_id = (select auth.uid())
+      and o.role = 'admin'
+      and o.active
+  )
+);
+
 drop policy if exists "owners can lock their new company identity" on public.companies;
 create policy "owners can lock their new company identity"
 on public.companies for update
@@ -610,12 +702,7 @@ to authenticated
 with check (
   user_id = (select auth.uid())
   and role = 'owner'
-  and exists (
-    select 1
-    from public.companies c
-    where c.id = company_memberships.company_id
-      and c.created_by = (select auth.uid())
-  )
+  and public.is_company_creator(company_memberships.company_id)
 );
 
 drop policy if exists "owners can invite company members" on public.company_memberships;
@@ -625,12 +712,7 @@ to authenticated
 with check (
   role in ('reviewer', 'read_only')
   and invited_by = (select auth.uid())
-  and exists (
-    select 1
-    from public.companies c
-    where c.id = company_memberships.company_id
-      and c.created_by = (select auth.uid())
-  )
+  and public.is_company_creator(company_memberships.company_id)
 );
 
 drop policy if exists "owners can update their own membership acceptance" on public.company_memberships;

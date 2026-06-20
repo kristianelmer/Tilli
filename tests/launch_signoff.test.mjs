@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import test from "node:test";
 
 import {
+  buildLaunchSignoffRecord,
   buildLaunchSignoffGate,
   launchSignoffKeys,
   launchSignoffLabel,
@@ -71,4 +72,50 @@ test("passes only when every launch signoff is approved with evidence", () => {
   assert.deepEqual(gate.missing, []);
   assert.deepEqual(gate.rejected, []);
   assert.deepEqual(gate.stale, []);
+});
+
+test("builds persisted launch signoff record and validates approved evidence", () => {
+  const record = buildLaunchSignoffRecord(
+    {
+      key: "legal_policy_pack",
+      status: "approved",
+      reviewer: "Legal Reviewer",
+      reviewedAt: "2026-06-20T10:00:00Z",
+      evidenceLink: "https://evidence.example/legal",
+      decision: "Approved for private launch.",
+      recordedBy: "operator-1",
+    },
+    new Date("2026-06-20T11:00:00Z"),
+  );
+
+  assert.equal(record.key, "legal_policy_pack");
+  assert.equal(record.reviewed_at, "2026-06-20T10:00:00Z");
+  assert.equal(record.updated_at, "2026-06-20T11:00:00.000Z");
+
+  assert.throws(
+    () =>
+      buildLaunchSignoffRecord({
+        key: "legal_policy_pack",
+        status: "approved",
+        reviewer: "",
+        reviewedAt: "2026-06-20T10:00:00Z",
+        evidenceLink: "https://evidence.example/legal",
+        decision: "Approved.",
+        recordedBy: "operator-1",
+      }),
+    /reviewer/,
+  );
+  assert.throws(
+    () =>
+      buildLaunchSignoffRecord({
+        key: "bad_key",
+        status: "approved",
+        reviewer: "Legal",
+        reviewedAt: "2026-06-20T10:00:00Z",
+        evidenceLink: "https://evidence.example/legal",
+        decision: "Approved.",
+        recordedBy: "operator-1",
+      }),
+    /Ugyldig/,
+  );
 });

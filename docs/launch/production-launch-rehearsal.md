@@ -70,7 +70,9 @@ test-environment evidence and named human release signoff exist.
 Record reviewer, date, evidence link, decision. The machine-checkable model is
 `app/lib/launch-signoff.ts`; it blocks launch unless every required decision is
 approved with reviewer, date, evidence link, and decision text. The
-`security_restore` signoff must be 30 days old or newer.
+`security_restore` signoff must be 30 days old or newer. Operator admins record
+these decisions in `launch_signoffs`; active operators can read the resulting
+gate state in the app operator section.
 
 | Decision | Reviewer | Date | Evidence link | Decision |
 | --- | --- | --- | --- | --- |

@@ -38,6 +38,7 @@ import {
   normalizeInvitationEmail,
   validateInvitationRole,
 } from "./lib/invitations";
+import { buildLaunchSignoffRecord } from "./lib/launch-signoff";
 import { validateManualJournal } from "./lib/manual-journal";
 import {
   OpeningShareholderInput,
@@ -2955,6 +2956,56 @@ export async function recordAuthorityTestEvidence(formData: FormData) {
     action: "authority_test_evidence_recorded",
     message: `${obligation} test-evidens registrert som ${status} med ref ${record.test_reference}.`,
   });
+
+  revalidatePath("/");
+  redirect("/");
+}
+
+export async function recordLaunchSignoff(formData: FormData) {
+  if (!hasSupabaseEnv()) {
+    redirect("/?error=Supabase%20env%20mangler");
+  }
+  const supabase = await createSupabaseServerClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+  if (!user) {
+    redirect("/?error=Innlogging%20kreves");
+  }
+
+  const { data: operator, error: operatorError } = await supabase
+    .from("support_operators")
+    .select("user_id, role, active")
+    .eq("user_id", user.id)
+    .eq("role", "admin")
+    .eq("active", true)
+    .maybeSingle();
+  if (operatorError) {
+    redirect(`/?error=${encodeURIComponent(operatorError.message)}`);
+  }
+  if (!operator) {
+    redirect("/?error=Admin%20operator%20kreves%20for%20launch%20signoff");
+  }
+
+  let record;
+  try {
+    record = buildLaunchSignoffRecord({
+      key: formString(formData, "key"),
+      status: formString(formData, "status"),
+      reviewer: formString(formData, "reviewer"),
+      reviewedAt: formString(formData, "reviewedAt"),
+      evidenceLink: formString(formData, "evidenceLink"),
+      decision: formString(formData, "decision"),
+      recordedBy: user.id,
+    });
+  } catch (error) {
+    redirect(`/?error=${encodeURIComponent(error instanceof Error ? error.message : "Ugyldig launch signoff")}`);
+  }
+
+  const { error } = await supabase.from("launch_signoffs").upsert(record, { onConflict: "key" });
+  if (error) {
+    redirect(`/?error=${encodeURIComponent(error.message)}`);
+  }
 
   revalidatePath("/");
   redirect("/");

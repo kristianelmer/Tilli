@@ -21,6 +21,7 @@ import {
   recordAdminCost,
   recordAuthorityTestEvidence,
   recordDividendReceived,
+  recordLaunchSignoff,
   recordOwnerDividend,
   recordSharePurchase,
   recordShareSale,
@@ -46,6 +47,7 @@ import {
   authorityObligations,
   productionAuthorityGate,
 } from "./lib/authority-permission";
+import { buildLaunchSignoffGate, launchSignoffKeys, launchSignoffLabel } from "./lib/launch-signoff";
 import { buildDeadlineDashboard, buildDeadlineReminderPlan, deadlineStatusLabel, defaultReminderPreferences } from "./lib/deadlines";
 import { summarizeDividendReceivedAnnualImpact } from "./lib/dividend-received";
 import { invitationStatus, reviewChecklistStatus } from "./lib/invitations";
@@ -70,6 +72,7 @@ import {
   listFilingSubmissions,
   listHoldingActions,
   listInvestmentPositions,
+  listLaunchSignoffs,
   listLedgerEntries,
   listNotificationOutbox,
   listOpeningSetups,
@@ -125,6 +128,9 @@ export default async function Home({ searchParams }: HomeProps) {
   const operatorDashboard = operatorSearch
     ? await searchOperatorSupportDashboard(operatorSearch, user?.id)
     : { summaries: [], isOperator: false, error: null };
+  const launchSignoffState = user
+    ? await listLaunchSignoffs(user.id)
+    : { launchSignoffs: [], isOperator: false, isAdminOperator: false, error: null };
   const primaryCompanyId = companies[0]?.id;
   const unmatchedTransactions = transactions.filter(
     (transaction) => !transaction.matched_entry_id && !transaction.matched_action_id && !transaction.accepted_warning,
@@ -189,6 +195,16 @@ export default async function Home({ searchParams }: HomeProps) {
       })
     : [];
   const deadlineReminderPreferences = defaultReminderPreferences();
+  const launchSignoffGate = buildLaunchSignoffGate({
+    signoffs: launchSignoffState.launchSignoffs.map((signoff) => ({
+      key: signoff.key,
+      status: signoff.status,
+      reviewer: signoff.reviewer,
+      reviewedAt: signoff.reviewed_at,
+      evidenceLink: signoff.evidence_link,
+      decision: signoff.decision,
+    })),
+  });
 
   return (
     <main className="shell">
@@ -1900,6 +1916,77 @@ export default async function Home({ searchParams }: HomeProps) {
           </button>
         </form>
         {operatorDashboard.error ? <p className="errorText">{operatorDashboard.error}</p> : null}
+        {launchSignoffState.error ? <p className="errorText">{launchSignoffState.error}</p> : null}
+        {launchSignoffState.isOperator ? (
+          <>
+            <div className="readinessGrid">
+              <div className="readinessItem">
+                <span>Launch signoff</span>
+                <strong data-status={launchSignoffGate.ready ? "ready" : "warning"}>{launchSignoffGate.status}</strong>
+                <p>{launchSignoffGate.messages[0] ?? "Alle launch signoffs er godkjent."}</p>
+                <p>Mangler: {launchSignoffGate.missing.length}</p>
+                <p>Avvist: {launchSignoffGate.rejected.length}</p>
+                <p>Utdatert: {launchSignoffGate.stale.length}</p>
+              </div>
+              {launchSignoffKeys.map((key) => {
+                const signoff = launchSignoffState.launchSignoffs.find((item) => item.key === key);
+                return (
+                  <div className="readinessItem" key={key}>
+                    <span>{launchSignoffLabel(key)}</span>
+                    <strong data-status={signoff?.status === "approved" ? "ready" : signoff ? "warning" : "draft"}>
+                      {signoff?.status ?? "pending"}
+                    </strong>
+                    <p>Reviewer: {signoff?.reviewer || "Mangler"}</p>
+                    <p>Dato: {signoff?.reviewed_at ? new Date(signoff.reviewed_at).toLocaleString("nb-NO") : "Mangler"}</p>
+                    <p>{signoff?.decision || "Ingen beslutning registrert."}</p>
+                    {signoff?.evidence_link ? <a href={signoff.evidence_link}>Evidens</a> : null}
+                  </div>
+                );
+              })}
+            </div>
+            {launchSignoffState.isAdminOperator ? (
+              <form className="dataPanel formPanel widePanel" action={recordLaunchSignoff}>
+                <label>
+                  Signoff
+                  <select name="key" defaultValue="launch_legal_name_public_copy">
+                    {launchSignoffKeys.map((key) => (
+                      <option key={key} value={key}>
+                        {launchSignoffLabel(key)}
+                      </option>
+                    ))}
+                  </select>
+                </label>
+                <label>
+                  Status
+                  <select name="status" defaultValue="pending">
+                    <option value="pending">Pending</option>
+                    <option value="approved">Approved</option>
+                    <option value="rejected">Rejected</option>
+                  </select>
+                </label>
+                <label>
+                  Reviewer
+                  <input name="reviewer" placeholder="Navn/rolle" />
+                </label>
+                <label>
+                  Reviewed at
+                  <input name="reviewedAt" type="datetime-local" required />
+                </label>
+                <label>
+                  Evidence link
+                  <input name="evidenceLink" placeholder="https://..." />
+                </label>
+                <label>
+                  Decision
+                  <textarea name="decision" placeholder="Beslutning, begrensninger, neste steg" />
+                </label>
+                <button className="secondaryButton" type="submit">
+                  Lagre launch signoff
+                </button>
+              </form>
+            ) : null}
+          </>
+        ) : null}
         <div className="readinessGrid">
           {operatorDashboard.summaries.map((summary) => (
             <div className="readinessItem" key={summary.companyId}>

@@ -8,6 +8,7 @@ import type {
   AnnualReadinessStatus,
 } from "../annual-readiness";
 import type { CancellationEvidence, CancellationStatus } from "../cancellation";
+import type { LaunchSignoffKey, LaunchSignoffStatus } from "../launch-signoff";
 import { assertOperatorSearchAllowed, buildOperatorSupportSummaries } from "../operator-support";
 import type {
   Rf1086ReceiptMetadata,
@@ -37,6 +38,17 @@ export type CompanyMembershipRow = {
   user_id: string;
   role: "owner" | "reviewer" | "read_only";
   accepted_at: string | null;
+};
+
+export type LaunchSignoffRow = {
+  key: LaunchSignoffKey;
+  status: LaunchSignoffStatus;
+  reviewer: string;
+  reviewed_at: string;
+  evidence_link: string;
+  decision: string;
+  recorded_by: string;
+  updated_at: string;
 };
 
 export type DocumentRow = {
@@ -757,6 +769,38 @@ export async function listCompanyCancellations(companyIds: string[]) {
 
   return {
     cancellations: (data ?? []) as CompanyCancellationRow[],
+    error: error?.message ?? null,
+  };
+}
+
+export async function listLaunchSignoffs(actorId?: string | null) {
+  if (!hasSupabaseEnv() || !actorId) {
+    return { launchSignoffs: [] as LaunchSignoffRow[], isOperator: false, isAdminOperator: false, error: null };
+  }
+  const supabase = await createSupabaseServerClient();
+  const { data: operator, error: operatorError } = await supabase
+    .from("support_operators")
+    .select("user_id, role, active")
+    .eq("user_id", actorId)
+    .eq("active", true)
+    .maybeSingle();
+  if (operatorError) {
+    return { launchSignoffs: [] as LaunchSignoffRow[], isOperator: false, isAdminOperator: false, error: operatorError.message };
+  }
+  const isOperator = Boolean(operator);
+  const isAdminOperator = operator?.role === "admin";
+  if (!isOperator) {
+    return { launchSignoffs: [] as LaunchSignoffRow[], isOperator, isAdminOperator, error: null };
+  }
+  const { data, error } = await supabase
+    .from("launch_signoffs")
+    .select("key, status, reviewer, reviewed_at, evidence_link, decision, recorded_by, updated_at")
+    .order("updated_at", { ascending: false });
+
+  return {
+    launchSignoffs: (data ?? []) as LaunchSignoffRow[],
+    isOperator,
+    isAdminOperator,
     error: error?.message ?? null,
   };
 }

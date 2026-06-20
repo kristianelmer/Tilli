@@ -31,6 +31,27 @@ export type LaunchSignoffGate = {
   messages: string[];
 };
 
+export type LaunchSignoffInput = {
+  key: string;
+  status: string;
+  reviewer: string;
+  reviewedAt: string;
+  evidenceLink: string;
+  decision: string;
+  recordedBy: string;
+};
+
+export type LaunchSignoffRecord = {
+  key: LaunchSignoffKey;
+  status: LaunchSignoffStatus;
+  reviewer: string;
+  reviewed_at: string;
+  evidence_link: string;
+  decision: string;
+  recorded_by: string;
+  updated_at: string;
+};
+
 const signoffLabels: Record<LaunchSignoffKey, string> = {
   launch_legal_name_public_copy: "Launch/legal/name/public copy",
   legal_policy_pack: "Legal/privacy/DPA/retention/incident",
@@ -56,6 +77,44 @@ function daysBetween(later: Date, earlier: Date) {
 
 export function launchSignoffLabel(key: LaunchSignoffKey) {
   return signoffLabels[key];
+}
+
+export function validateLaunchSignoffKey(value: string): LaunchSignoffKey {
+  if (!launchSignoffKeys.includes(value as LaunchSignoffKey)) {
+    throw new Error("Ugyldig launch signoff.");
+  }
+  return value as LaunchSignoffKey;
+}
+
+export function validateLaunchSignoffStatus(value: string): LaunchSignoffStatus {
+  if (!["approved", "rejected", "pending"].includes(value)) {
+    throw new Error("Ugyldig launch signoff status.");
+  }
+  return value as LaunchSignoffStatus;
+}
+
+export function buildLaunchSignoffRecord(input: LaunchSignoffInput, now = new Date()): LaunchSignoffRecord {
+  const key = validateLaunchSignoffKey(input.key);
+  const status = validateLaunchSignoffStatus(input.status);
+  if (!nonEmpty(input.recordedBy)) {
+    throw new Error("Recorded by mangler.");
+  }
+  if (!validDate(input.reviewedAt)) {
+    throw new Error("Review date er ugyldig.");
+  }
+  if (status === "approved" && (!nonEmpty(input.reviewer) || !nonEmpty(input.evidenceLink) || !nonEmpty(input.decision))) {
+    throw new Error("Approved signoff krever reviewer, evidenslenke og beslutning.");
+  }
+  return {
+    key,
+    status,
+    reviewer: input.reviewer.trim(),
+    reviewed_at: input.reviewedAt,
+    evidence_link: input.evidenceLink.trim(),
+    decision: input.decision.trim(),
+    recorded_by: input.recordedBy.trim(),
+    updated_at: now.toISOString(),
+  };
 }
 
 export function buildLaunchSignoffGate(input: {
