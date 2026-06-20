@@ -51,6 +51,10 @@ Production implications:
 - Talli can model annual-account data and readiness from public sources.
 - Talli now has a narrow RR0002 field evidence pack for a simple holding AS, but cannot claim production RR-0002 filing until generated payloads, attachment rules, signing flow, feedback, and receipt behavior are validated in TT02 or equivalent test environment.
 - Brønnøysund docs state system user can fill/upload/lock, but signature requires ID-porten; owner-managed filing therefore needs an ID-porten-only or hybrid system-user/person signing flow.
+- `buildFilingReleaseGates` must remain `production_disabled` until
+  accepted `authority_test_runs` evidence for `aarsregnskap` has receipt and
+  archive refs, and the persisted `launch_signoffs` key
+  `annual_accounts_authority` is approved with reviewer/date/evidence/decision.
 
 ## Talli Launch Subset
 

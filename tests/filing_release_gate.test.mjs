@@ -23,13 +23,26 @@ const readyPermissions = [
   { obligation: "aarsregnskap", confirmed_at: "2026-01-01T00:00:00.000Z", production_enabled: true },
 ];
 
+const readyAuthorityEvidence = [
+  { obligation: "aksjonaerregisteroppgaven", status: "accepted", receipt_reference: "rf1086-receipt", archive_reference: "rf1086-archive", recorded_at: "2026-06-17T09:00:00.000Z" },
+  { obligation: "skattemelding", status: "accepted", receipt_reference: "tax-receipt", archive_reference: "tax-archive", recorded_at: "2026-06-17T09:00:00.000Z" },
+  { obligation: "aarsregnskap", status: "accepted", receipt_reference: "rr-receipt", archive_reference: "rr-archive", recorded_at: "2026-06-17T09:00:00.000Z" },
+];
+
+const readyLaunchSignoffs = [
+  { key: "rf1086_authority", status: "approved", reviewer: "RF reviewer", reviewedAt: "2026-06-17T09:00:00.000Z", evidenceLink: "https://evidence.example/rf1086", decision: "Approved RF-1086 production gate." },
+  { key: "tax_return_authority", status: "approved", reviewer: "Tax reviewer", reviewedAt: "2026-06-17T09:00:00.000Z", evidenceLink: "https://evidence.example/tax", decision: "Approved tax return production gate." },
+  { key: "annual_accounts_authority", status: "approved", reviewer: "RR reviewer", reviewedAt: "2026-06-17T09:00:00.000Z", evidenceLink: "https://evidence.example/rr", decision: "Approved annual accounts production gate." },
+];
+
 test("keeps all production filing gates disabled without authority, billing, step-up, and human review", () => {
   const gates = buildFilingReleaseGates({
     authorityPermissions: [],
+    authorityTestRuns: [],
     billingAccount: null,
     filingReadyByObligation: {},
     stepUpContext: { actorId: "owner", mfaVerifiedAt: null },
-    humanReviewApprovedByObligation: {},
+    launchSignoffs: [],
     now: new Date("2026-06-17T10:00:00.000Z"),
   });
 
@@ -37,13 +50,15 @@ test("keeps all production filing gates disabled without authority, billing, ste
   assert.ok(gates.every((gate) => gate.status === "production_disabled"));
   assert.ok(gates.every((gate) => gate.disabledReasons.includes("missing_authority_confirmation")));
   assert.ok(gates.every((gate) => gate.disabledReasons.includes("billing_account_missing")));
-  assert.ok(gates.every((gate) => gate.disabledReasons.includes("human_release_review_missing")));
+  assert.ok(gates.every((gate) => gate.disabledReasons.includes("test_evidence_missing")));
+  assert.ok(gates.every((gate) => gate.disabledReasons.some((reason) => reason.endsWith("_signoff_missing"))));
   assert.match(gates[0].publicCopyRestriction, /forhåndsvisning\/simulering/);
 });
 
-test("marks production ready only when every release gate passes", () => {
+test("blocks production when authority evidence or filing-specific signoff is missing", () => {
   const gates = buildFilingReleaseGates({
     authorityPermissions: readyPermissions,
+    authorityTestRuns: readyAuthorityEvidence.filter((item) => item.obligation !== "skattemelding"),
     billingAccount: readyBilling,
     filingReadyByObligation: {
       aksjonaerregisteroppgaven: true,
@@ -56,11 +71,38 @@ test("marks production ready only when every release gate passes", () => {
       securityReviewApproved: true,
       productionCredentialsEnabled: true,
     },
-    humanReviewApprovedByObligation: {
+    launchSignoffs: readyLaunchSignoffs.filter((item) => item.key !== "rf1086_authority"),
+    now: new Date("2026-06-17T10:00:00.000Z"),
+  });
+
+  const rf1086 = gates.find((gate) => gate.obligation === "aksjonaerregisteroppgaven");
+  const tax = gates.find((gate) => gate.obligation === "skattemelding");
+  const annual = gates.find((gate) => gate.obligation === "aarsregnskap");
+
+  assert.equal(rf1086.status, "production_disabled");
+  assert.ok(rf1086.disabledReasons.includes("rf1086_authority_signoff_missing"));
+  assert.equal(tax.status, "production_disabled");
+  assert.ok(tax.disabledReasons.includes("test_evidence_missing"));
+  assert.equal(annual.status, "production_ready");
+});
+
+test("marks production ready only when every release gate passes", () => {
+  const gates = buildFilingReleaseGates({
+    authorityPermissions: readyPermissions,
+    authorityTestRuns: readyAuthorityEvidence,
+    billingAccount: readyBilling,
+    filingReadyByObligation: {
       aksjonaerregisteroppgaven: true,
       skattemelding: true,
       aarsregnskap: true,
     },
+    stepUpContext: {
+      actorId: "owner",
+      mfaVerifiedAt: "2026-06-17T09:55:00.000Z",
+      securityReviewApproved: true,
+      productionCredentialsEnabled: true,
+    },
+    launchSignoffs: readyLaunchSignoffs,
     now: new Date("2026-06-17T10:00:00.000Z"),
   });
 

@@ -53,6 +53,10 @@ Production implication:
 - Talli's current tax return preview cannot be treated as a production filing payload.
 - The `skattemelding upersonlig` API is useful for model/validation research but does not by itself prove direct filing capability.
 - Production filing must use the current Skatteetaten system-supplier submission flow and current schemas, not the simplified preview model.
+- `buildFilingReleaseGates` must remain `production_disabled` until accepted
+  `authority_test_runs` evidence for `skattemelding` has receipt and archive
+  refs, and the persisted `launch_signoffs` key `tax_return_authority` is
+  approved with reviewer/date/evidence/decision.
 
 ## Talli Launch Subset
 

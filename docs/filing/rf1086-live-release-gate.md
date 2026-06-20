@@ -43,6 +43,13 @@ Excluded live scope:
 | Feedback/receipt archive | Official references, feedback document ids, receipt id persisted | Simulation seam implemented; official evidence pending |
 | Human signoff | Named reviewer signs production release decision | Pending |
 
+Code gate anchors:
+
+- `buildFilingReleaseGates` requires accepted `authority_test_runs` evidence
+  with receipt and archive refs for `aksjonaerregisteroppgaven`.
+- `buildFilingReleaseGates` requires approved `launch_signoffs` key
+  `rf1086_authority` with reviewer, date, evidence link, and decision.
+
 ## Required Test Run
 
 Before release signoff:

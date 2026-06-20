@@ -59,7 +59,8 @@ The rehearsal command covers:
 RF-1086, årsregnskap, and skattemelding must each show one of:
 
 - `production_ready` from `buildFilingReleaseGates`, with authority, billing,
-  security, credential, readiness, and human-review gates passed; or
+  accepted authority test evidence, receipt/archive refs, security, credential,
+  readiness, and filing-specific launch signoff gates passed; or
 - `production_disabled` with public copy restricted to preview/simulation.
 
 Current launch state is `production_disabled` until official authority
