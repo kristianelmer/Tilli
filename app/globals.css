@@ -1297,6 +1297,121 @@ h2 {
   justify-content: space-between;
 }
 
+/* ----- Holding actions (#96) ----- */
+.actionGrid {
+  display: grid;
+  gap: var(--space-4);
+  grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
+}
+
+.actionCard {
+  background: var(--color-surface);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  box-shadow: var(--shadow-sm);
+  color: inherit;
+  display: grid;
+  gap: var(--space-2);
+  padding: var(--space-5);
+  text-decoration: none;
+  transition: border-color 0.15s ease, box-shadow 0.15s ease;
+}
+
+.actionCard:hover {
+  border-color: var(--color-brand);
+  box-shadow: var(--shadow-md);
+}
+
+.actionCardTitle {
+  font-size: var(--text-md);
+  font-weight: var(--weight-semibold);
+  margin: 0;
+}
+
+.actionCardBody {
+  color: var(--color-text-muted);
+  font-size: var(--text-sm);
+  margin: 0;
+}
+
+.postings {
+  background: var(--color-surface-muted);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-sm);
+  display: grid;
+  gap: var(--space-3);
+  padding: var(--space-4);
+}
+
+.postingsTable {
+  border-collapse: collapse;
+  font-size: var(--text-sm);
+  width: 100%;
+}
+
+.postingsTable th {
+  border-bottom: 1px solid var(--color-border);
+  color: var(--color-text-muted);
+  font-weight: var(--weight-medium);
+  padding: var(--space-2);
+  text-align: left;
+}
+
+.postingsTable td {
+  border-bottom: 1px solid var(--color-border);
+  padding: var(--space-2);
+}
+
+.postingsTable td.num,
+.postingsTable th.num {
+  font-variant-numeric: tabular-nums;
+  text-align: right;
+}
+
+.postingsTable tfoot td {
+  border-bottom: none;
+  font-weight: var(--weight-semibold);
+}
+
+.recentList {
+  display: grid;
+  gap: var(--space-2);
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.recentItem {
+  align-items: baseline;
+  border-bottom: 1px solid var(--color-border);
+  display: flex;
+  gap: var(--space-3);
+  justify-content: space-between;
+  padding: var(--space-2) 0;
+}
+
+.recentType {
+  font-weight: var(--weight-medium);
+}
+
+.recentMeta {
+  color: var(--color-text-muted);
+  font-size: var(--text-sm);
+  font-variant-numeric: tabular-nums;
+}
+
+.checkboxField {
+  align-items: center;
+  display: flex;
+  font-size: var(--text-sm);
+  gap: var(--space-2);
+}
+
+.checkboxField input {
+  height: 16px;
+  width: 16px;
+}
+
 /* ----- Banner / Alert ----- */
 .banner {
   align-items: flex-start;

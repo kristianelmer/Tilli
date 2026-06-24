@@ -85,18 +85,35 @@ function formString(formData: FormData, key: string) {
 }
 
 /**
- * Post-action redirect target. Owner setup forms can pass a hidden `returnTo`
- * so the guided onboarding wizard (#95) keeps control of the flow; everything
- * else defaults to the transitional /workspace surface. Only known internal
- * owner paths are allowed.
+ * Post-action redirect target. Owner forms can pass a hidden `returnTo` so the
+ * guided flows (onboarding #95, holding-action wizards #96) keep control of the
+ * flow; everything else defaults to the transitional /workspace surface. Only
+ * known internal owner paths are allowed.
  */
+const RETURN_TO_ALLOWLIST = new Set([
+  "/workspace",
+  "/onboarding",
+  "/onboarding?step=bank",
+  "/actions",
+]);
+
 function returnTarget(formData: FormData): string {
   const raw = formString(formData, "returnTo");
-  return raw === "/onboarding" ? raw : "/workspace";
+  return RETURN_TO_ALLOWLIST.has(raw) ? raw : "/workspace";
 }
 
 function failTo(returnTo: string, message: string): never {
-  redirect(`${returnTo}?error=${encodeURIComponent(message)}`);
+  const separator = returnTo.includes("?") ? "&" : "?";
+  redirect(`${returnTo}${separator}error=${encodeURIComponent(message)}`);
+}
+
+/**
+ * Post-success redirect for the holding-action wizards (#96). When the owner
+ * returns to the actions hub, flag `posted` so the hub can confirm the entry
+ * was booked; other return targets are left untouched.
+ */
+function succeedTo(returnTo: string): never {
+  redirect(returnTo === "/actions" ? "/actions?posted=1" : returnTo);
 }
 
 async function requireSensitiveActionStepUp(
@@ -1318,7 +1335,7 @@ export async function recordDividendReceived(formData: FormData) {
         : error instanceof Error
           ? error.message
           : "Ugyldig mottatt utbytte";
-    redirect(`/workspace?error=${encodeURIComponent(message)}`);
+    failTo(returnTarget(formData), message);
   }
 
   if (bankTransactionId) {
@@ -1409,7 +1426,7 @@ export async function recordDividendReceived(formData: FormData) {
   });
 
   revalidatePath("/");
-  redirect("/workspace");
+  succeedTo(returnTarget(formData));
 }
 
 export async function recordSharePurchase(formData: FormData) {
@@ -1450,7 +1467,7 @@ export async function recordSharePurchase(formData: FormData) {
         : error instanceof Error
           ? error.message
           : "Ugyldig aksjekjøp";
-    redirect(`/workspace?error=${encodeURIComponent(message)}`);
+    failTo(returnTarget(formData), message);
   }
 
   if (bankTransactionId) {
@@ -1579,7 +1596,7 @@ export async function recordSharePurchase(formData: FormData) {
   });
 
   revalidatePath("/");
-  redirect("/workspace");
+  succeedTo(returnTarget(formData));
 }
 
 export async function recordShareSale(formData: FormData) {
@@ -1633,7 +1650,7 @@ export async function recordShareSale(formData: FormData) {
         : error instanceof Error
           ? error.message
           : "Ugyldig aksjesalg";
-    redirect(`/workspace?error=${encodeURIComponent(message)}`);
+    failTo(returnTarget(formData), message);
   }
 
   if (bankTransactionId) {
@@ -1749,7 +1766,7 @@ export async function recordShareSale(formData: FormData) {
   });
 
   revalidatePath("/");
-  redirect("/workspace");
+  succeedTo(returnTarget(formData));
 }
 
 export async function recordOwnerDividend(formData: FormData) {
@@ -1804,7 +1821,7 @@ export async function recordOwnerDividend(formData: FormData) {
         : error instanceof Error
           ? error.message
           : "Ugyldig eierutbytte";
-    redirect(`/workspace?error=${encodeURIComponent(message)}`);
+    failTo(returnTarget(formData), message);
   }
 
   const lines = ownerDividendLedgerLines(payload);
@@ -1857,7 +1874,7 @@ export async function recordOwnerDividend(formData: FormData) {
   });
 
   revalidatePath("/");
-  redirect("/workspace");
+  succeedTo(returnTarget(formData));
 }
 
 export async function recordShareholderLoan(formData: FormData) {
@@ -1899,7 +1916,7 @@ export async function recordShareholderLoan(formData: FormData) {
         : error instanceof Error
           ? error.message
           : "Ugyldig aksjonærlån";
-    redirect(`/workspace?error=${encodeURIComponent(message)}`);
+    failTo(returnTarget(formData), message);
   }
 
   if (bankTransactionId) {
@@ -1991,7 +2008,7 @@ export async function recordShareholderLoan(formData: FormData) {
   });
 
   revalidatePath("/");
-  redirect("/workspace");
+  succeedTo(returnTarget(formData));
 }
 
 export async function recordTaxSettlement(formData: FormData) {
@@ -2027,7 +2044,7 @@ export async function recordTaxSettlement(formData: FormData) {
         : error instanceof Error
           ? error.message
           : "Ugyldig skatteoppgjør";
-    redirect(`/workspace?error=${encodeURIComponent(message)}`);
+    failTo(returnTarget(formData), message);
   }
 
   if (bankTransactionId) {
@@ -2118,7 +2135,7 @@ export async function recordTaxSettlement(formData: FormData) {
   });
 
   revalidatePath("/");
-  redirect("/workspace");
+  succeedTo(returnTarget(formData));
 }
 
 export async function saveBillingAccount(formData: FormData) {

@@ -23,6 +23,9 @@ export default async function OwnerLayout({
           <Link className="appNavLink" href="/dashboard">
             {ownerCopy.nav.overview}
           </Link>
+          <Link className="appNavLink" href="/actions">
+            {ownerCopy.nav.actions}
+          </Link>
           <Link className="appNavLink" href="/workspace">
             {ownerCopy.nav.workspace}
           </Link>
