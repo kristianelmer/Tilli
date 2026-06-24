@@ -81,6 +81,7 @@ import {
   listWorkspaceInvitations,
 } from "../../lib/supabase/server";
 import { loadWorkspaceData } from "../../lib/workspace-data";
+import { ownerCopy } from "../../lib/copy";
 
 type WorkspaceProps = {
   searchParams?: Promise<{ error?: string; operatorOrg?: string }>;
@@ -163,18 +164,22 @@ export default async function WorkspacePage({ searchParams }: WorkspaceProps) {
     <>
       <section className="band mutedBand">
         <div className="sectionHeader">
-          <p className="eyebrow">Launch boundary</p>
-          <h1>Holding-first årsrapportering for enkle AS.</h1>
+          <p className="eyebrow">{ownerCopy.workspace.boundaryEyebrow}</p>
+          <h1>{ownerCopy.workspace.boundaryTitle}</h1>
         </div>
         <div className="readinessGrid">
           <div className="readinessItem">
-            <span>Myndigheter</span>
-            <strong data-status="warning">Ikke tilknyttet</strong>
+            <span>{ownerCopy.workspace.authorities}</span>
+            <strong data-status="warning">
+              {ownerCopy.workspace.authoritiesValue}
+            </strong>
             <p>{requiredNonAffiliationCopy}</p>
           </div>
           <div className="readinessItem">
-            <span>Direkte filing</span>
-            <strong data-status="draft">Gatet</strong>
+            <span>{ownerCopy.workspace.directFiling}</span>
+            <strong data-status="draft">
+              {ownerCopy.workspace.directFilingValue}
+            </strong>
             <p>{preProductionDirectFilingCopy}</p>
           </div>
         </div>
@@ -182,49 +187,48 @@ export default async function WorkspacePage({ searchParams }: WorkspaceProps) {
 
       <section className="workspace" id="arbeidsflate">
         <div className="intro">
-          <p className="eyebrow">Supabase arbeidsflate</p>
-          <h1>Holding workspace</h1>
-          <p className="lede">
-            Første ekte SaaS-snitt: innlogging, selskap, medlemskap, RLS og audit trail i
-            Supabase. Demo-data brukes ikke for denne arbeidsflaten.
-          </p>
+          <p className="eyebrow">{ownerCopy.workspace.introEyebrow}</p>
+          <h1>{ownerCopy.workspace.introTitle}</h1>
+          <p className="lede">{ownerCopy.workspace.introLede}</p>
           {params?.error ? <p className="errorText">{params.error}</p> : null}
           {!hasSupabaseEnv() ? (
-            <p className="errorText">Supabase-miljøvariabler mangler.</p>
+            <p className="errorText">{ownerCopy.auth.unavailable}</p>
           ) : user ? (
             <form action={signOut}>
               <button className="secondaryButton" type="submit">
-                Logg ut
+                {ownerCopy.nav.signOut}
               </button>
             </form>
           ) : null}
         </div>
 
-        <aside className="statusPanel" aria-label="Innlogging">
+        <aside className="statusPanel" aria-label={ownerCopy.workspace.statusHeading}>
           <div className="panelHeader">
-            <span>Status</span>
-            <strong>{user ? "Innlogget" : "Ikke innlogget"}</strong>
+            <span>{ownerCopy.workspace.statusHeading}</span>
+            <strong>
+              {user ? ownerCopy.workspace.signedIn : ownerCopy.workspace.signedOut}
+            </strong>
           </div>
           <div className="metricGrid">
             <div>
-              <span>Selskaper</span>
+              <span>{ownerCopy.workspace.companiesLabel}</span>
               <strong>{companies.length}</strong>
             </div>
             <div>
-              <span>DB</span>
-              <strong>{error ? "Feil" : "OK"}</strong>
-            </div>
-            <div>
-              <span>RLS</span>
-              <strong>På</strong>
+              <span>{ownerCopy.workspace.connectionLabel}</span>
+              <strong>
+                {error
+                  ? ownerCopy.workspace.connectionError
+                  : ownerCopy.workspace.connectionOk}
+              </strong>
             </div>
           </div>
         </aside>
       </section>
           <section className="band" id="opprett">
             <div className="sectionHeader">
-              <p className="eyebrow">Selskapsarbeidsflate</p>
-              <h2>Opprett AS-workspace i Supabase.</h2>
+              <p className="eyebrow">{ownerCopy.workspace.createEyebrow}</p>
+              <h2>{ownerCopy.workspace.createTitle}</h2>
             </div>
             <form className="dataPanel formPanel widePanel" action={createWorkspace}>
               <label>
@@ -232,19 +236,16 @@ export default async function WorkspacePage({ searchParams }: WorkspaceProps) {
                 <input name="orgNumber" inputMode="numeric" pattern="[0-9]{9}" required />
               </label>
               <button className="primaryButton" type="submit">
-                Hent fra Brønnøysund og opprett
+                {ownerCopy.workspace.createCta}
               </button>
-              <p>
-                Kun AS går videre. ENK, NUF, ASA og andre selskapsformer stoppes før
-                arbeidsflate opprettes.
-              </p>
+              <p>{ownerCopy.workspace.onlyAs}</p>
             </form>
           </section>
 
           <section className="band mutedBand">
             <div className="sectionHeader">
-              <p className="eyebrow">Persistente selskaper</p>
-              <h2>Arbeidsflater leses fra Supabase.</h2>
+              <p className="eyebrow">{ownerCopy.workspace.companiesEyebrow}</p>
+              <h2>{ownerCopy.workspace.companiesTitle}</h2>
             </div>
             <div className="readinessGrid">
               {companies.map((company) => {
@@ -264,9 +265,11 @@ export default async function WorkspacePage({ searchParams }: WorkspaceProps) {
               })}
               {companies.length === 0 ? (
                 <div className="readinessItem">
-                  <span>Ingen selskap</span>
-                  <strong data-status="draft">Utkast</strong>
-                  <p>Opprett første arbeidsflate for å teste DB, RLS og audit trail.</p>
+                  <span>{ownerCopy.workspace.noCompaniesLabel}</span>
+                  <strong data-status="draft">
+                    {ownerCopy.workspace.noCompaniesStatus}
+                  </strong>
+                  <p>{ownerCopy.workspace.noCompaniesBody}</p>
                 </div>
               ) : null}
             </div>
@@ -382,11 +385,11 @@ export default async function WorkspacePage({ searchParams }: WorkspaceProps) {
                     </p>
                   </div>
                   <div className="readinessItem">
-                    <span>Retained classes</span>
+                    <span>Oppbevaringsplikt</span>
                     <strong data-status="warning">Lovpålagt vurdering</strong>
                     <p>
                       {primaryCancellation?.evidence?.retentionClasses?.join(", ") ??
-                        "Dokumenter, ledger, filingkvitteringer, billing og audit kan måtte beholdes."}
+                        "Dokumenter, regnskap, innsendingskvitteringer, fakturering og logg kan måtte beholdes."}
                     </p>
                   </div>
                   {cancellationLifecycle.map((item) => (
@@ -487,7 +490,7 @@ export default async function WorkspacePage({ searchParams }: WorkspaceProps) {
                   <button className="secondaryButton" type="submit">
                     Send invitasjon
                   </button>
-                  <p>Krever fersk MFA/step-up. E-post legges i notification outbox.</p>
+                  <p>Krever ny identitetsbekreftelse. Vi sender e-postvarselet automatisk.</p>
                 </form>
                 <form className="dataPanel formPanel widePanel" action={acceptWorkspaceInvitation}>
                   <span className="panelLabel">Godta invitasjon</span>
@@ -597,7 +600,7 @@ export default async function WorkspacePage({ searchParams }: WorkspaceProps) {
                             </label>
                             <label>
                               <input name="ownerConfirmed" type="checkbox" required />
-                              Jeg bekrefter at overstyringen skal vises i readiness og audit trail.
+                              Jeg bekrefter at overstyringen skal vises i status og loggen.
                             </label>
                             <button className="secondaryButton" type="submit">
                               Legg til overstyring
@@ -831,17 +834,17 @@ export default async function WorkspacePage({ searchParams }: WorkspaceProps) {
                     <strong data-status={taxSettlementActions.length ? "ready" : "draft"}>
                       {taxSettlementActions.length} postert
                     </strong>
-                    <p>{taxSettlementEntries.length} skatteoppgjørsposteringer i ledger.</p>
-                    <p>Arkivet inkluderer skatteoppgjør med bilag og ledger-lenke.</p>
+                    <p>{taxSettlementEntries.length} skatteoppgjørsposteringer i regnskapet.</p>
+                    <p>Arkivet inkluderer skatteoppgjør med bilag og regnskapskobling.</p>
                   </div>
                 </div>
               </section>
 
               <section className="band">
                 <div className="sectionHeader">
-                  <p className="eyebrow">Billing</p>
-                  <h2>Persistert abonnement og filingpakke uten betalingsleverandør.</h2>
-                  <p>Billing-admin krever fersk MFA/step-up før server action får endre status.</p>
+                  <p className="eyebrow">Fakturering</p>
+                  <h2>Abonnement og innsendingspakke.</h2>
+                  <p>Endring av fakturering krever ny identitetsbekreftelse.</p>
                 </div>
                 <div className="setupGrid">
                   <form className="dataPanel formPanel" action={saveBillingAccount}>
@@ -909,13 +912,13 @@ export default async function WorkspacePage({ searchParams }: WorkspaceProps) {
                     <p>Abonnement: {primaryBillingAccount?.subscription_provider_ref ?? "Ikke betalt"}</p>
                   </div>
                   <div className="readinessItem">
-                    <span>Gate</span>
+                    <span>Innsendingspakke</span>
                     <strong data-status={primaryBillingGate?.allowed ? "ready" : primaryBillingGate?.chargeAllowed ? "warning" : "draft"}>
-                      {primaryBillingGate?.status ?? "billing_account_missing"}
+                      {primaryBillingGate?.status ?? "Faktureringskonto mangler"}
                     </strong>
-                    <p>{primaryBillingGate?.message ?? "Opprett billingkonto før filingpakke."}</p>
-                    <p>Readiness {primaryFilingReady ? "klar" : "ikke klar"} for {primaryIncomeYear}.</p>
-                    <p>Filingpakke ref: {primaryBillingAccount?.filing_package_payment_ref ?? "Ikke betalt"}</p>
+                    <p>{primaryBillingGate?.message ?? "Opprett faktureringskonto før innsendingspakke."}</p>
+                    <p>Status {primaryFilingReady ? "klar" : "ikke klar"} for {primaryIncomeYear}.</p>
+                    <p>Innsendingspakke ref: {primaryBillingAccount?.filing_package_payment_ref ?? "Ikke betalt"}</p>
                     {primaryBillingAccount && !primaryBillingAccount.subscription_active ? (
                       <form action={activateBillingSubscription}>
                         <input name="companyId" type="hidden" value={primaryCompanyId} />
@@ -1801,20 +1804,14 @@ export default async function WorkspacePage({ searchParams }: WorkspaceProps) {
           ) : null}
       <section id="sikkerhet" className="split">
         <div>
-          <p className="eyebrow">Sikkerhet</p>
-          <h2>Sensitive handlinger feiler lukket uten fersk MFA/step-up.</h2>
-          <p>
-            Produksjonsfiling, innsendingsrett, reviewer-invitasjon, rolleendring,
-            arkiveksport, billing-admin og sletting krever server-side step-up-kontroll.
-            Blokkerte og tillatte forsøk logges som audit events uten hemmeligheter.
-          </p>
+          <p className="eyebrow">{ownerCopy.workspace.security.eyebrow}</p>
+          <h2>{ownerCopy.workspace.security.title}</h2>
+          <p>{ownerCopy.workspace.security.body}</p>
         </div>
         <ol className="actionList">
-          <li>Supabase Auth-session</li>
-          <li>Company membership med owner-rolle</li>
-          <li>RLS-basert tenant-isolasjon</li>
-          <li>Fersk MFA/step-up innen 15 minutter for sensitive handlinger</li>
-          <li>Audit event for tillatt og blokkert sensitiv handling</li>
+          {ownerCopy.workspace.security.points.map((point) => (
+            <li key={point}>{point}</li>
+          ))}
         </ol>
       </section>
     </>

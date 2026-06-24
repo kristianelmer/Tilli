@@ -3,6 +3,7 @@ import { redirect } from "next/navigation";
 
 import { signOut } from "../actions";
 import { getOperatorContext } from "../lib/supabase/server";
+import { ownerCopy } from "../lib/copy";
 
 export default async function OwnerLayout({
   children,
@@ -16,18 +17,18 @@ export default async function OwnerLayout({
       <header className="appTopbar">
         <div className="appBrand">
           <span className="appBrandMark" aria-hidden="true" />
-          <span>Talli</span>
+          <span>{ownerCopy.brand}</span>
         </div>
         <nav className="appNav" aria-label="Hovedmeny">
           <Link className="appNavLink" href="/dashboard">
-            Oversikt
+            {ownerCopy.nav.overview}
           </Link>
           <Link className="appNavLink" href="/workspace">
-            Arbeidsflate
+            {ownerCopy.nav.workspace}
           </Link>
           {isOperator ? (
             <Link className="appNavLink" data-variant="operator" href="/operator">
-              Operatør
+              {ownerCopy.nav.operator}
             </Link>
           ) : null}
         </nav>
@@ -35,7 +36,7 @@ export default async function OwnerLayout({
           <span className="cardLabel">{user.email}</span>
           <form action={signOut}>
             <button className="btn btn--ghost" type="submit">
-              Logg ut
+              {ownerCopy.nav.signOut}
             </button>
           </form>
         </div>
