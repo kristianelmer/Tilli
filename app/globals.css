@@ -1412,6 +1412,103 @@ h2 {
   width: 16px;
 }
 
+/* ----- Year-end interview (#97) ----- */
+.interview {
+  display: grid;
+  gap: var(--space-5);
+}
+
+.qList {
+  display: grid;
+  gap: var(--space-5);
+}
+
+.qItem {
+  display: grid;
+  gap: var(--space-3);
+}
+
+.qPrompt {
+  font-size: var(--text-md);
+  font-weight: var(--weight-medium);
+  margin: 0;
+}
+
+.qHelp {
+  color: var(--color-text-muted);
+  font-size: var(--text-sm);
+  margin: 0;
+}
+
+.segmented {
+  display: inline-grid;
+  gap: var(--space-2);
+  grid-auto-flow: column;
+  justify-content: start;
+}
+
+.segmentedBtn {
+  background: var(--color-surface);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-sm);
+  color: inherit;
+  cursor: pointer;
+  font-size: var(--text-sm);
+  font-weight: var(--weight-medium);
+  min-width: 84px;
+  padding: var(--space-2) var(--space-4);
+  transition: background 0.15s ease, border-color 0.15s ease, color 0.15s ease;
+}
+
+.segmentedBtn:hover {
+  border-color: var(--color-brand);
+}
+
+.segmentedBtn[data-active="true"] {
+  background: var(--color-brand);
+  border-color: var(--color-brand);
+  color: var(--color-brand-contrast);
+}
+
+.qHint {
+  margin: 0;
+}
+
+.interviewFooter {
+  align-items: center;
+  display: flex;
+  justify-content: space-between;
+  gap: var(--space-3);
+}
+
+.summaryBlock {
+  display: grid;
+  gap: var(--space-4);
+}
+
+.summarySection {
+  display: grid;
+  gap: var(--space-2);
+}
+
+.summaryHeading {
+  font-size: var(--text-md);
+  font-weight: var(--weight-semibold);
+  margin: 0;
+}
+
+.summaryList {
+  display: grid;
+  gap: var(--space-1);
+  margin: 0;
+  padding-left: var(--space-5);
+}
+
+.fieldHelp {
+  color: var(--color-text-muted);
+  font-size: var(--text-sm);
+}
+
 /* ----- Banner / Alert ----- */
 .banner {
   align-items: flex-start;

@@ -18,6 +18,7 @@ export const ownerCopy = {
   nav: {
     overview: "Oversikt",
     actions: "Handlinger",
+    yearEnd: "Årsavslutning",
     workspace: "Arbeidsflate",
     operator: "Operatør",
     signOut: "Logg ut",
@@ -397,6 +398,125 @@ export const ownerCopy = {
       dateLabel: "Oppgjørsdato",
       amountLabel: "Beløp (kr)",
     },
+  },
+
+  yearEnd: {
+    title: (year: number) => `Årsavslutning ${year}`,
+    intro:
+      "Vi går gjennom året sammen, steg for steg. Svarene dine fyller ut det vi trenger til aksjonærregisteroppgaven, skattemeldingen og årsregnskapet.",
+    needsCompanyTitle: "Sett opp selskapet først",
+    needsCompanyBody:
+      "Du må sette opp holdingselskapet før du kan gjøre årsavslutningen.",
+    needsCompanyCta: "Kom i gang",
+    resumeNote: "Svarene er lagret og kan endres når som helst.",
+    yes: "Ja",
+    no: "Nei",
+    back: "Tilbake",
+    next: "Neste",
+    submit: "Lagre og gå til oversikten",
+    pending: "Lagrer …",
+    steps: {
+      activity: "Aktivitet",
+      control: "Kontroll",
+      approval: "Godkjenning",
+      summary: "Oppsummering",
+    },
+    stepHeads: {
+      activity: {
+        title: "Hva skjedde i selskapet i år?",
+        intro: "Svar så godt du kan – vi sjekker mot det du har registrert.",
+      },
+      control: {
+        title: "Stemmer tallene?",
+        intro: "To raske kontroller før vi går videre.",
+      },
+      approval: {
+        title: "Godkjenning og innsendingsrett",
+        intro: "Det siste vi trenger for å kunne sende inn.",
+      },
+      summary: {
+        title: "Oppsummering",
+        intro: "Slik ser året ut. Lagre når du er klar.",
+      },
+    },
+    fteLabel: "Antall årsverk i selskapet",
+    fteHelp: "Et holdingselskap uten ansatte har som regel 0.",
+    questions: {
+      shares_owned_at_year_end: {
+        q: "Eide selskapet aksjer ved årsslutt?",
+      },
+      bought_or_sold_shares: {
+        q: "Kjøpte eller solgte selskapet aksjer i år?",
+      },
+      received_dividends: {
+        q: "Mottok selskapet utbytte på sine investeringer?",
+      },
+      declared_owner_dividends: {
+        q: "Besluttet selskapet å dele ut utbytte til eier?",
+      },
+      shareholder_loans: {
+        q: "Har selskapet lån til eller fra en aksjonær?",
+      },
+      paid_costs: {
+        q: "Betalte selskapet kostnader i år (gebyrer, revisor og lignende)?",
+      },
+      bank_balance_confirmed: {
+        q: "Har du kontrollert at bankbalansen stemmer med kontoutskriften?",
+      },
+      has_unpaid_items: {
+        q: "Har selskapet ubetalte poster (leverandørgjeld eller uoppgjorte krav)?",
+      },
+      general_meeting_approved: {
+        q: "Har generalforsamlingen godkjent årsregnskapet?",
+      },
+      authority_to_submit_confirmed: {
+        q: "Bekrefter du at du har rett til å sende inn på vegne av selskapet?",
+      },
+    } as Record<string, { q: string; help?: string }>,
+    // Inline consistency nudges: an interview answer that implies a registration
+    // the owner has not made yet, or a state that blocks a later filing.
+    consistency: {
+      bought_or_sold_shares:
+        "Registrer kjøpet eller salget under Handlinger, slik at aksjonærregisteroppgaven og skattemeldingen stemmer.",
+      received_dividends:
+        "Registrer mottatt utbytte under Handlinger – det påvirker skattemeldingen med 3 % sjablongskatt.",
+      declared_owner_dividends:
+        "Registrer utbytte til eier under Handlinger, og kontroller at generalforsamlingen har godkjent det.",
+      shareholder_loans:
+        "Registrer aksjonærlånet under Handlinger, så det kommer med i årsregnskapet.",
+      paid_costs:
+        "Sørg for at kostnadene er bokført, slik at årsregnskapet og skattemeldingen blir riktige.",
+    } as Record<string, string>,
+    warnings: {
+      bankNotConfirmed:
+        "Bankbalansen bør kontrolleres mot kontoutskriften før innsending.",
+    },
+    blocks: {
+      unpaidItems:
+        "Ubetalte poster støttes ikke i den enkle årsavslutningen. Ta kontakt med regnskapsfører.",
+      generalMeeting:
+        "Generalforsamlingen må godkjenne årsregnskapet før det kan sendes inn.",
+      authority:
+        "Du må bekrefte innsendingsrett før noe kan sendes inn.",
+    },
+    summary: {
+      activityTitle: "Aktivitet i året",
+      noActivity:
+        "Dette ser ut som et år uten aktivitet. Talli forbereder en forenklet innsending.",
+      noneActive: "Ingen aktivitet registrert i året.",
+      blocksTitle: "Dette må løses før innsending",
+      remindersTitle: "Husk å registrere",
+      allClear: "Alt ser bra ut. Lagre, så finner du neste steg på oversikten.",
+      activeLine: (label: string) => label,
+    },
+    activityLabels: {
+      shares_owned_at_year_end: "Eide aksjer ved årsslutt",
+      bought_or_sold_shares: "Kjøpte eller solgte aksjer",
+      received_dividends: "Mottok utbytte",
+      declared_owner_dividends: "Besluttet utbytte til eier",
+      shareholder_loans: "Aksjonær- eller konsernlån",
+      paid_costs: "Betalte kostnader",
+    } as Record<string, string>,
   },
 } as const;
 

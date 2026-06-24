@@ -95,6 +95,7 @@ const RETURN_TO_ALLOWLIST = new Set([
   "/onboarding",
   "/onboarding?step=bank",
   "/actions",
+  "/dashboard",
 ]);
 
 function returnTarget(formData: FormData): string {
@@ -2647,7 +2648,7 @@ export async function saveYearEndInterview(formData: FormData) {
   });
 
   revalidatePath("/");
-  redirect("/workspace");
+  redirect(returnTarget(formData));
 }
 
 export async function refreshAnnualReadinessSnapshots(formData: FormData) {
