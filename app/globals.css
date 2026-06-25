@@ -1662,6 +1662,176 @@ h2 {
   margin: 0;
 }
 
+/* ----- Transactions & reconciliation (#99) ----- */
+.txSection {
+  display: grid;
+  gap: var(--space-4);
+  margin-bottom: var(--space-6);
+}
+
+.txSectionHead {
+  align-items: center;
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-3);
+  justify-content: space-between;
+}
+
+.txImport {
+  background: var(--color-surface);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  box-shadow: var(--shadow-sm);
+  display: grid;
+  gap: var(--space-3);
+  padding: var(--space-5);
+}
+
+.txCsv {
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: var(--text-sm);
+  min-height: 140px;
+  resize: vertical;
+  width: 100%;
+}
+
+.txPreview {
+  background: var(--color-surface-muted);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-sm);
+  display: grid;
+  gap: var(--space-2);
+  padding: var(--space-4);
+}
+
+.txPreviewTitle {
+  font-size: var(--text-sm);
+  font-weight: var(--weight-semibold);
+}
+
+.txPreviewWarn {
+  color: var(--color-warning-text);
+  font-size: var(--text-sm);
+  margin: 0;
+}
+
+.txPreviewCount {
+  color: var(--color-text-muted);
+  font-size: var(--text-sm);
+  font-weight: var(--weight-medium);
+  margin: 0;
+}
+
+.txTable {
+  border-collapse: collapse;
+  font-size: var(--text-sm);
+  width: 100%;
+}
+
+.txTable th,
+.txTable td {
+  border-bottom: 1px solid var(--color-border);
+  padding: var(--space-2) var(--space-3);
+  text-align: left;
+}
+
+.txTable th {
+  color: var(--color-text-muted);
+  font-weight: var(--weight-medium);
+}
+
+.txNum {
+  font-variant-numeric: tabular-nums;
+  text-align: right;
+}
+
+.txQueue {
+  display: grid;
+  gap: var(--space-2);
+}
+
+.txRow {
+  background: var(--color-surface);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  box-shadow: var(--shadow-sm);
+}
+
+.txRowSummary {
+  align-items: center;
+  cursor: pointer;
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-3);
+  justify-content: space-between;
+  list-style: none;
+  padding: var(--space-4) var(--space-5);
+}
+
+.txRowSummary::-webkit-details-marker {
+  display: none;
+}
+
+.txRowMain {
+  align-items: center;
+  display: flex;
+  gap: var(--space-3);
+  min-width: 0;
+}
+
+.txRowText {
+  font-weight: var(--weight-medium);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.txRowMeta {
+  align-items: baseline;
+  color: var(--color-text-muted);
+  display: flex;
+  font-size: var(--text-sm);
+  gap: var(--space-3);
+}
+
+.txRowAmount {
+  font-variant-numeric: tabular-nums;
+  font-weight: var(--weight-semibold);
+}
+
+.txResolve {
+  border-top: 1px solid var(--color-border);
+  display: grid;
+  gap: var(--space-4);
+  padding: var(--space-5);
+}
+
+.txResolveOption {
+  display: grid;
+  gap: var(--space-2);
+  justify-items: start;
+}
+
+.txResolveTitle {
+  font-size: var(--text-md);
+  font-weight: var(--weight-semibold);
+  margin: 0;
+}
+
+.txCostForm {
+  display: grid;
+  gap: var(--space-3);
+  justify-items: start;
+  max-width: 360px;
+  width: 100%;
+}
+
+.txReconciled {
+  display: grid;
+  gap: var(--space-3);
+  margin-top: var(--space-5);
+}
+
 /* ----- Banner / Alert ----- */
 .banner {
   align-items: flex-start;

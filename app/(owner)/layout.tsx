@@ -26,6 +26,9 @@ export default async function OwnerLayout({
           <Link className="appNavLink" href="/actions">
             {ownerCopy.nav.actions}
           </Link>
+          <Link className="appNavLink" href="/transactions">
+            {ownerCopy.nav.transactions}
+          </Link>
           <Link className="appNavLink" href="/year-end">
             {ownerCopy.nav.yearEnd}
           </Link>

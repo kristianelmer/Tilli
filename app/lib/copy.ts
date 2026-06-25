@@ -18,6 +18,7 @@ export const ownerCopy = {
   nav: {
     overview: "Oversikt",
     actions: "Handlinger",
+    transactions: "Transaksjoner",
     yearEnd: "Årsavslutning",
     filing: "Innsending",
     workspace: "Arbeidsflate",
@@ -718,6 +719,74 @@ export const ownerCopy = {
       { message: string; fixHref?: string; fixLabel?: string }
     >,
     blockerFallback: "Et punkt gjenstår før innsending.",
+  },
+
+  transactions: {
+    hubTitle: "Transaksjoner",
+    hubLede:
+      "Importer kontoutskriften og avstem hver linje. Talli foreslår hva som hører sammen – du bekrefter.",
+    needsCompanyTitle: "Sett opp selskapet først",
+    needsCompanyBody:
+      "Du må sette opp holdingselskapet før du kan importere transaksjoner.",
+    needsCompanyCta: "Kom i gang",
+    yearLabel: (year: number) => `Inntektsår ${year}`,
+    imported: "Kontoutskriften er importert.",
+    posted: "Transaksjonen er avstemt.",
+    import: {
+      title: "Importer kontoutskrift",
+      intro:
+        "Lim inn kontoutskriften som CSV. Første linje må ha kolonnene date, text og amount – balance er valgfritt.",
+      formatHint:
+        "Format: date,text,amount,balance — én transaksjon per linje, dato som ÅÅÅÅ-MM-DD.",
+      placeholder:
+        "date,text,amount,balance\n2025-01-02,Inngående saldo,30000,30000\n2025-01-03,Bankgebyr,-50,29950",
+      previewTitle: "Forhåndsvisning",
+      previewEmpty: "Lim inn CSV-en for å se en forhåndsvisning.",
+      previewCount: (n: number) =>
+        `${n} ${n === 1 ? "transaksjon" : "transaksjoner"} klar til import`,
+      moreRows: (n: number) => `+ ${n} flere`,
+      missingColumns:
+        "CSV-en mangler kolonnene date, text og amount. Sjekk den første linjen.",
+      cta: "Importer",
+      pending: "Importerer …",
+      cols: { date: "Dato", text: "Tekst", amount: "Beløp", balance: "Saldo" },
+    },
+    queue: {
+      title: "Til avstemming",
+      intro: "Disse linjene mangler en kobling. Velg hva hver enkelt gjelder.",
+      countLabel: (n: number) => `${n} til avstemming`,
+      incoming: "Innbetaling",
+      outgoing: "Utbetaling",
+      resolveCostTitle: "Bokfør som kostnad",
+      resolveCostHint: "Gebyrer, regnskap, programvare og lignende.",
+      resolveActionTitle: "Registrer som handling",
+      resolveActionHint: "Utbytte, kjøp eller salg av aksjer, aksjonærlån.",
+      resolveActionCta: "Til handlinger",
+      resolveManualTitle: "Noe annet",
+      resolveManualHint:
+        "Poster som ikke passer over, kan posteres manuelt i arbeidsflaten.",
+      resolveManualCta: "Til arbeidsflate",
+      categoryLabel: "Kategori",
+      payeeLabel: "Mottaker",
+      bookCta: "Bokfør og avstem",
+      bookPending: "Bokfører …",
+      categories: {
+        bank_fee: "Bankgebyr",
+        accounting_fee: "Regnskap",
+        software: "Programvare",
+        public_fee: "Offentlig gebyr",
+        legal_advisory: "Juridisk rådgivning",
+        other_admin_cost: "Annen administrasjon",
+      } as Record<string, string>,
+    },
+    emptyTitle: "Ingen transaksjoner ennå",
+    emptyBody:
+      "Importer kontoutskriften over for å komme i gang med avstemmingen.",
+    allReconciledTitle: "Alt er avstemt",
+    allReconciledBody: (n: number) =>
+      `Alle ${n} ${n === 1 ? "transaksjon er" : "transaksjoner er"} koblet. Fint jobbet!`,
+    reconciledTitle: "Avstemt i år",
+    reconciledCount: (n: number) => `${n} avstemt`,
   },
 } as const;
 

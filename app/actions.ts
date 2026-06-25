@@ -99,6 +99,7 @@ const RETURN_TO_ALLOWLIST = new Set([
   "/filing/aksjonaerregisteroppgaven",
   "/filing/skattemelding",
   "/filing/aarsregnskap",
+  "/transactions",
 ]);
 
 function returnTarget(formData: FormData): string {
@@ -1239,6 +1240,7 @@ export async function recordAdminCost(formData: FormData) {
   const amount = Number(formString(formData, "amount"));
   const paidDate = formString(formData, "paidDate");
   const documentId = formString(formData, "documentId");
+  const returnTo = returnTarget(formData);
 
   const { data: transaction, error: transactionError } = await supabase
     .from("bank_transactions")
@@ -1246,25 +1248,25 @@ export async function recordAdminCost(formData: FormData) {
     .eq("id", bankTransactionId)
     .single();
   if (transactionError || !transaction) {
-    redirect(`/workspace?error=${encodeURIComponent(transactionError?.message ?? "Fant ikke banktransaksjon")}`);
+    failTo(returnTo, transactionError?.message ?? "Fant ikke banktransaksjon");
   }
   if (transaction.company_id !== companyId || Number(transaction.income_year) !== incomeYear) {
-    redirect("/workspace?error=Banktransaksjonen%20tilh%C3%B8rer%20ikke%20valgt%20selskap%20og%20%C3%A5r");
+    failTo(returnTo, "Banktransaksjonen tilhører ikke valgt selskap og år.");
   }
   if (transaction.matched_entry_id || transaction.matched_action_id || transaction.accepted_warning) {
-    redirect("/workspace?error=Banktransaksjonen%20er%20allerede%20avstemt");
+    failTo(returnTo, "Banktransaksjonen er allerede avstemt.");
   }
   try {
     assertBankTransactionMatchesCost(Number(transaction.amount), amount);
   } catch (error) {
-    redirect(`/workspace?error=${encodeURIComponent(error instanceof Error ? error.message : "Bankmatch feilet")}`);
+    failTo(returnTo, error instanceof Error ? error.message : "Bankmatch feilet");
   }
 
   let lines;
   try {
     lines = buildAdminCostLedgerLines({ category, payee, amount });
   } catch (error) {
-    redirect(`/workspace?error=${encodeURIComponent(error instanceof Error ? error.message : "Ugyldig administrasjonskostnad")}`);
+    failTo(returnTo, error instanceof Error ? error.message : "Ugyldig administrasjonskostnad");
   }
 
   const { data: entry, error: entryError } = await supabase
@@ -1280,7 +1282,7 @@ export async function recordAdminCost(formData: FormData) {
     .select("id")
     .single();
   if (entryError || !entry) {
-    redirect(`/workspace?error=${encodeURIComponent(entryError?.message ?? "Kunne ikke postere administrasjonskostnad")}`);
+    failTo(returnTo, entryError?.message ?? "Kunne ikke postere administrasjonskostnad");
   }
 
   const { error: matchError } = await supabase
@@ -1288,7 +1290,7 @@ export async function recordAdminCost(formData: FormData) {
     .update({ matched_entry_id: entry.id })
     .eq("id", bankTransactionId);
   if (matchError) {
-    redirect(`/workspace?error=${encodeURIComponent(matchError.message)}`);
+    failTo(returnTo, matchError.message);
   }
 
   await supabase.from("audit_events").insert({
@@ -1300,7 +1302,7 @@ export async function recordAdminCost(formData: FormData) {
   });
 
   revalidatePath("/");
-  redirect("/workspace");
+  redirect(returnTo);
 }
 
 export async function recordDividendReceived(formData: FormData) {
