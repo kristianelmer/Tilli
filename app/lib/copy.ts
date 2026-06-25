@@ -22,6 +22,7 @@ export const ownerCopy = {
     yearEnd: "Årsavslutning",
     filing: "Innsending",
     documents: "Dokumenter",
+    billing: "Abonnement",
     workspace: "Arbeidsflate",
     operator: "Operatør",
     signOut: "Logg ut",
@@ -851,6 +852,55 @@ export const ownerCopy = {
         "Når du har arkivert en innsending for året, kan du hente ut hele selskapsarkivet her.",
       notReadyCta: "Til innsending",
     },
+  },
+  billing: {
+    hubTitle: "Abonnement",
+    hubLede:
+      "Se prisplanen din, abonnementsstatus og innsendingspakke. Du blir ikke belastet før betaling åpnes.",
+    needsCompanyTitle: "Sett opp selskapet først",
+    needsCompanyBody:
+      "Du må sette opp holdingselskapet før du kan se abonnementet.",
+    needsCompanyCta: "Kom i gang",
+    planTitle: "Prisplan",
+    plans: {
+      founder: "Founder",
+      standard: "Standard",
+    } as Record<string, string>,
+    currentPlanLabel: "Din plan",
+    perMonth: (kr: number) => `${kr} kr/md`,
+    packagePrice: (kr: number) => `${kr} kr per innsending`,
+    founderCohort: (n: number) => `Founder-plass nr. ${n} av 100`,
+    statusTitle: "Status",
+    subscription: {
+      title: "Abonnement",
+      active: "Aktivt",
+      inactive: "Ikke aktivert ennå",
+      activeHint: "Abonnementet ditt er aktivt.",
+      inactiveHint: "Abonnementet aktiveres når betaling åpnes.",
+    },
+    package: {
+      title: "Innsendingspakke",
+      paid: "Betalt",
+      unpaid: "Ikke betalt ennå",
+      paidHint: "Innsendingspakken for året er betalt.",
+      unpaidHint: "Innsendingspakken betales per år når du sender inn.",
+    },
+    refund: {
+      eligibleTitle: "Du har krav på refusjon",
+      eligibleBody:
+        "Vi fant et avvik som Talli dekker, så innsendingspakken refunderes. Du trenger ikke gjøre noe.",
+      completedTitle: "Refusjon fullført",
+      completedBody: "Refusjonen er gjennomført.",
+    },
+    unsupportedTitle: "Utenfor det Talli støtter i dag",
+    unsupportedBody:
+      "Saken din er mer sammensatt enn det Talli støtter i dag. Du blir ikke belastet for innsendingspakke.",
+    placeholderTitle: "Betaling er ikke aktivert ennå",
+    placeholderBody:
+      "Du kan se planen og statusen din her. Betaling åpnes før innsending blir tilgjengelig – du blir ikke belastet før da.",
+    noAccountTitle: "Abonnementet settes opp snart",
+    noAccountBody:
+      "Når selskapet er klart, ser du prisplan og status her. Inntil da kan du se prisene under.",
   },
 } as const;
 
