@@ -2562,3 +2562,249 @@ h2 {
 .uiSwatchMeta code {
   color: var(--color-text-muted);
 }
+
+/* ===== Public landing page (home) ===== */
+.lpPage {
+  background: var(--color-bg);
+  color: var(--color-text);
+  min-height: 100vh;
+}
+
+.lpHeader {
+  border-bottom: 1px solid var(--color-border);
+}
+
+.lpHeaderInner,
+.lpMain,
+.lpFooterInner {
+  margin: 0 auto;
+  max-width: var(--content-max);
+  width: 100%;
+}
+
+.lpHeaderInner {
+  align-items: center;
+  display: flex;
+  gap: var(--space-4);
+  justify-content: space-between;
+  padding: var(--space-4) var(--space-5);
+}
+
+.lpHeaderActions {
+  align-items: center;
+  display: flex;
+  gap: var(--space-3);
+}
+
+.lpMain {
+  display: grid;
+  gap: var(--space-9);
+  padding: var(--space-8) var(--space-5);
+}
+
+.lpHero {
+  display: grid;
+  gap: var(--space-4);
+  max-width: 720px;
+}
+
+.lpEyebrow {
+  color: var(--color-brand);
+  font-size: var(--text-sm);
+  font-weight: var(--weight-semibold);
+  letter-spacing: 0.04em;
+  margin: 0;
+  text-transform: uppercase;
+}
+
+.lpTitle {
+  font-size: clamp(2rem, 5vw, 3.25rem);
+  line-height: 1.1;
+  margin: 0;
+}
+
+.lpLede {
+  color: var(--color-text-muted);
+  font-size: var(--text-lg);
+  line-height: 1.5;
+  margin: 0;
+  max-width: 600px;
+}
+
+.lpCtaRow {
+  align-items: center;
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-3);
+  margin-top: var(--space-2);
+}
+
+.lpReassure {
+  color: var(--color-text-subtle);
+  font-size: var(--text-sm);
+  margin: var(--space-2) 0 0;
+}
+
+.lpSection {
+  display: grid;
+  gap: var(--space-5);
+}
+
+.lpSectionTitle {
+  font-size: var(--text-2xl);
+  margin: 0;
+}
+
+.lpFeatures {
+  display: grid;
+  gap: var(--space-4);
+  grid-template-columns: repeat(3, 1fr);
+}
+
+.lpCard {
+  background: var(--color-surface);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  box-shadow: var(--shadow-sm);
+  display: grid;
+  gap: var(--space-2);
+  padding: var(--space-5);
+}
+
+.lpCardTitle {
+  font-size: var(--text-lg);
+  margin: 0;
+}
+
+.lpCardBody {
+  color: var(--color-text-muted);
+  line-height: 1.6;
+  margin: 0;
+}
+
+.lpSteps {
+  display: grid;
+  gap: var(--space-5);
+  grid-template-columns: repeat(4, 1fr);
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.lpStep {
+  display: grid;
+  gap: var(--space-2);
+}
+
+.lpStepNum {
+  align-items: center;
+  background: var(--color-brand-soft);
+  border-radius: var(--radius-pill);
+  color: var(--color-brand-strong);
+  display: inline-flex;
+  font-weight: var(--weight-bold);
+  height: 36px;
+  justify-content: center;
+  width: 36px;
+}
+
+.lpStepTitle {
+  font-size: var(--text-md);
+  margin: 0;
+}
+
+.lpStepBody {
+  color: var(--color-text-muted);
+  line-height: 1.6;
+  margin: 0;
+}
+
+.lpScope {
+  background: var(--color-surface);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-lg);
+  display: grid;
+  gap: var(--space-2);
+  padding: var(--space-6);
+}
+
+.lpScopeTitle {
+  font-size: var(--text-xl);
+  margin: 0;
+}
+
+.lpScopeBody {
+  color: var(--color-text-muted);
+  line-height: 1.6;
+  margin: 0;
+  max-width: 640px;
+}
+
+.lpClosing {
+  align-items: center;
+  background: var(--color-brand);
+  border-radius: var(--radius-lg);
+  color: var(--color-text-inverse);
+  display: grid;
+  gap: var(--space-3);
+  justify-items: center;
+  padding: var(--space-8) var(--space-5);
+  text-align: center;
+}
+
+.lpClosingTitle {
+  font-size: var(--text-2xl);
+  margin: 0;
+}
+
+.lpClosingBody {
+  margin: 0;
+  max-width: 520px;
+  opacity: 0.92;
+}
+
+.lpFooter {
+  border-top: 1px solid var(--color-border);
+}
+
+.lpFooterInner {
+  align-items: center;
+  color: var(--color-text-muted);
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-4);
+  justify-content: space-between;
+  padding: var(--space-6) var(--space-5);
+}
+
+.lpFooterLinks {
+  align-items: center;
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-4);
+}
+
+.lpFooterLinks a {
+  color: var(--color-text-muted);
+  font-size: var(--text-sm);
+}
+
+.lpFooterLinks a:hover {
+  color: var(--color-brand);
+}
+
+@media (max-width: 860px) {
+  .lpFeatures {
+    grid-template-columns: 1fr;
+  }
+
+  .lpSteps {
+    grid-template-columns: repeat(2, 1fr);
+  }
+}
+
+@media (max-width: 560px) {
+  .lpSteps {
+    grid-template-columns: 1fr;
+  }
+}

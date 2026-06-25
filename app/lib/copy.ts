@@ -15,6 +15,76 @@ export const ownerCopy = {
   brand: "Talli",
   tagline: "Holding-først årsrapportering for enkle AS.",
 
+  home: {
+    metaTitle: "Talli – enkelt årsoppgjør for holdingselskaper",
+    metaDescription:
+      "Talli veileder deg gjennom aksjonærregisteroppgaven, skattemeldingen og årsregnskapet for enkle norske holdingselskaper – i klartekst.",
+    nav: {
+      signIn: "Logg inn",
+      signUp: "Opprett bruker",
+      toApp: "Gå til Talli",
+    },
+    hero: {
+      eyebrow: "For norske holdingselskaper",
+      title: "Årsoppgjøret for holdingselskapet ditt – uten regnskapsfører",
+      lede: "Talli veileder deg steg for steg gjennom aksjonærregisteroppgaven, skattemeldingen og årsregnskapet. Laget for enkle norske AS, i klartekst.",
+      primaryCta: "Kom i gang",
+      secondaryCta: "Logg inn",
+      reassurance:
+        "Henter selskapsdata fra Brønnøysund · Du betaler først ved innsending",
+    },
+    features: {
+      title: "Alt på ett sted",
+      items: [
+        {
+          title: "Vi henter dataene",
+          body: "Talli henter offisiell selskapsinformasjon fra Brønnøysundregistrene, så du slipper å fylle inn alt manuelt.",
+        },
+        {
+          title: "Veiledet årsoppgjør",
+          body: "Aksjonærregisteroppgaven, skattemeldingen og årsregnskapet – forklart steg for steg, uten regnskapssjargong.",
+        },
+        {
+          title: "Trygg innsending",
+          body: "Hver innsending kvalitetssikres med menneskelig kontroll før noe sendes til myndighetene.",
+        },
+      ],
+    },
+    steps: {
+      title: "Slik fungerer det",
+      items: [
+        {
+          title: "Koble selskapet",
+          body: "Opprett bruker og legg inn organisasjonsnummeret til holdingselskapet.",
+        },
+        {
+          title: "Talli vurderer",
+          body: "Vi finner ut hva selskapet må levere for inntektsåret.",
+        },
+        {
+          title: "Du bekrefter",
+          body: "Gå gjennom tallene i et enkelt språk og godkjenn.",
+        },
+        {
+          title: "Levering",
+          body: "Innsendingen kvalitetssikres og leveres til riktig myndighet.",
+        },
+      ],
+    },
+    scope: {
+      title: "Laget for enkle holdingselskaper",
+      body: "Talli passer best for holdingselskaper og enkle AS uten ansatte eller drift. Er saken mer sammensatt, sier Talli fra – så du aldri sender inn noe du er usikker på.",
+    },
+    closing: {
+      title: "Klar til å forenkle årsoppgjøret?",
+      body: "Opprett en bruker og se hva holdingselskapet ditt må levere – helt uforpliktende.",
+      cta: "Kom i gang",
+    },
+    footer: {
+      rights: "© 2026 Talli",
+    },
+  },
+
   nav: {
     overview: "Oversikt",
     actions: "Handlinger",
