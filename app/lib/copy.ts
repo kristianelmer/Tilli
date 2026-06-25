@@ -21,6 +21,7 @@ export const ownerCopy = {
     transactions: "Transaksjoner",
     yearEnd: "Årsavslutning",
     filing: "Innsending",
+    documents: "Dokumenter",
     workspace: "Arbeidsflate",
     operator: "Operatør",
     signOut: "Logg ut",
@@ -787,6 +788,69 @@ export const ownerCopy = {
       `Alle ${n} ${n === 1 ? "transaksjon er" : "transaksjoner er"} koblet. Fint jobbet!`,
     reconciledTitle: "Avstemt i år",
     reconciledCount: (n: number) => `${n} avstemt`,
+  },
+  documents: {
+    hubTitle: "Dokumenter",
+    hubLede:
+      "Last opp bilag og regnskap, last dem trygt ned igjen, og hent ut et komplett arkiv for året.",
+    needsCompanyTitle: "Sett opp selskapet først",
+    needsCompanyBody:
+      "Du må sette opp holdingselskapet før du kan laste opp dokumenter.",
+    needsCompanyCta: "Kom i gang",
+    yearLabel: (year: number) => `Inntektsår ${year}`,
+    uploaded: "Dokumentet er lastet opp.",
+    upload: {
+      title: "Last opp dokument",
+      intro:
+        "Bankutskrifter, kvitteringer, protokoller og annet som hører til regnskapet.",
+      typeLabel: "Type",
+      types: {
+        bank_statement: "Bankutskrift",
+        accounting_document: "Regnskapsbilag",
+        corporate_document: "Selskapsdokument",
+      } as Record<string, string>,
+      linkedToLabel: "Gjelder",
+      linkedOptions: {
+        workspace: "Generelt",
+        aksjonaerregisteroppgaven: "Aksjonærregisteroppgaven",
+        skattemelding: "Skattemelding",
+        aarsregnskap: "Årsregnskap",
+      } as Record<string, string>,
+      fileLabel: "Fil",
+      fileHint:
+        "Filen lagres privat for selskapet og kan bare lastes ned av deg.",
+      chooseFile: "Velg en fil for å laste opp",
+      cta: "Last opp",
+      pending: "Laster opp …",
+    },
+    list: {
+      title: "Dine dokumenter",
+      intro: "Alle bilag for selskapet, med trygg nedlasting.",
+      download: "Last ned",
+      secureNote: "Nedlasting er sikret og lenken utløper etter kort tid.",
+      missingHint:
+        "Dette er en plassholder. Last opp selve filen for å fullføre.",
+      missingCta: "Last opp fil",
+      statusAttached: "Lastet opp",
+      statusMissing: "Mangler fil",
+      statusNotRequired: "Ikke påkrevd",
+      genericType: "Dokument",
+    },
+    emptyTitle: "Ingen dokumenter ennå",
+    emptyBody:
+      "Last opp det første bilaget over for å begynne å bygge selskapsarkivet.",
+    archive: {
+      title: "Eksporter selskapsarkiv",
+      body:
+        "Et komplett arkiv for inntektsåret: selskapsdata, åpningsbalanse, posteringer, handlinger, innsendinger og bilagsoversikt – samlet i én fil du kan ta vare på.",
+      cta: "Eksporter arkiv",
+      secureNote:
+        "Eksport kan kreve at du bekrefter identiteten din en ekstra gang.",
+      notReadyTitle: "Arkivet er klart etter første innsending",
+      notReadyBody:
+        "Når du har arkivert en innsending for året, kan du hente ut hele selskapsarkivet her.",
+      notReadyCta: "Til innsending",
+    },
   },
 } as const;
 

@@ -1832,6 +1832,104 @@ h2 {
   margin-top: var(--space-5);
 }
 
+/* ----- Documents & archive (#100) ----- */
+.docSection {
+  display: grid;
+  gap: var(--space-3);
+  margin-bottom: var(--space-6);
+}
+
+.docUpload {
+  background: var(--color-surface);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  box-shadow: var(--shadow-sm);
+  display: grid;
+  gap: var(--space-3);
+  padding: var(--space-5);
+}
+
+.docUploadGrid {
+  display: grid;
+  gap: var(--space-3);
+  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+}
+
+.docList {
+  display: grid;
+  gap: var(--space-2);
+}
+
+.docRow {
+  align-items: center;
+  background: var(--color-surface);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  box-shadow: var(--shadow-sm);
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-3);
+  justify-content: space-between;
+  padding: var(--space-4) var(--space-5);
+}
+
+.docRowMain {
+  display: grid;
+  gap: var(--space-1);
+  min-width: 0;
+}
+
+.docRowName {
+  font-weight: var(--weight-medium);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.docRowType {
+  color: var(--color-text-muted);
+  font-size: var(--text-sm);
+}
+
+.docRowSide {
+  align-items: center;
+  display: flex;
+  gap: var(--space-3);
+}
+
+.docDownload {
+  color: var(--color-brand);
+  font-size: var(--text-sm);
+  font-weight: var(--weight-medium);
+  text-decoration: none;
+}
+
+.docDownload:hover {
+  text-decoration: underline;
+}
+
+.docMissingLink {
+  color: var(--color-warning-text);
+  font-size: var(--text-sm);
+  font-weight: var(--weight-medium);
+  text-decoration: none;
+}
+
+.docMissingLink:hover {
+  text-decoration: underline;
+}
+
+.docArchive {
+  background: var(--color-surface);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  box-shadow: var(--shadow-sm);
+  display: grid;
+  gap: var(--space-3);
+  justify-items: start;
+  padding: var(--space-5);
+}
+
 /* ----- Banner / Alert ----- */
 .banner {
   align-items: flex-start;

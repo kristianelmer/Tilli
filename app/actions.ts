@@ -100,6 +100,7 @@ const RETURN_TO_ALLOWLIST = new Set([
   "/filing/skattemelding",
   "/filing/aarsregnskap",
   "/transactions",
+  "/documents",
 ]);
 
 function returnTarget(formData: FormData): string {
@@ -254,15 +255,16 @@ export async function createWorkspace(formData: FormData) {
 }
 
 export async function uploadDocument(formData: FormData) {
+  const returnTo = returnTarget(formData);
   if (!hasSupabaseEnv()) {
-    redirect("/workspace?error=Supabase%20env%20mangler");
+    failTo(returnTo, "Tjenesten er midlertidig utilgjengelig.");
   }
   const supabase = await createSupabaseServerClient();
   const {
     data: { user },
   } = await supabase.auth.getUser();
   if (!user) {
-    redirect("/workspace?error=Innlogging%20kreves");
+    failTo(returnTo, "Innlogging kreves.");
   }
 
   const companyId = formString(formData, "companyId");
@@ -271,7 +273,7 @@ export async function uploadDocument(formData: FormData) {
   const linkedTo = formString(formData, "linkedTo") || "workspace";
   const file = formData.get("file");
   if (!(file instanceof File) || file.size === 0) {
-    redirect("/workspace?error=Velg%20dokument%20for%20opplasting");
+    failTo(returnTo, "Velg et dokument for opplasting.");
   }
 
   const documentId = crypto.randomUUID();
@@ -281,7 +283,7 @@ export async function uploadDocument(formData: FormData) {
     upsert: false,
   });
   if (uploadError) {
-    redirect(`/workspace?error=${encodeURIComponent(uploadError.message)}`);
+    failTo(returnTo, uploadError.message);
   }
 
   const { error: metadataError } = await supabase.from("documents").insert({
@@ -297,7 +299,7 @@ export async function uploadDocument(formData: FormData) {
     created_by: user.id,
   });
   if (metadataError) {
-    redirect(`/workspace?error=${encodeURIComponent(metadataError.message)}`);
+    failTo(returnTo, metadataError.message);
   }
 
   await supabase.from("audit_events").insert({
@@ -309,7 +311,7 @@ export async function uploadDocument(formData: FormData) {
   });
 
   revalidatePath("/");
-  redirect("/workspace");
+  redirect(returnTo);
 }
 
 export async function createOpeningBalanceSetup(formData: FormData) {
