@@ -25,6 +25,7 @@ export const ownerCopy = {
     billing: "Abonnement",
     workspace: "Arbeidsflate",
     operator: "Operatør",
+    menu: "Meny",
     signOut: "Logg ut",
   },
 
