@@ -3,7 +3,7 @@
 import { useMemo, useState } from "react";
 
 import { importBankCsv } from "../../actions";
-import { SubmitButton } from "../../components/ui";
+import { FileDropzone, SubmitButton } from "../../components/ui";
 import { ownerCopy } from "../../lib/copy";
 
 const c = ownerCopy.transactions.import;
@@ -72,18 +72,17 @@ export function BankImport({ companyId, incomeYear, returnTo }: BankImportProps)
       <input type="hidden" name="incomeYear" value={incomeYear} />
       <input type="hidden" name="returnTo" value={returnTo} />
 
-      <label className="field">
+      <div className="field">
         <span className="fieldLabel">{c.title}</span>
-        <textarea
+        <FileDropzone
           name="csvText"
-          className="txCsv"
-          rows={6}
-          value={csv}
-          onChange={(event) => setCsv(event.target.value)}
-          placeholder={c.placeholder}
-          required
+          label={c.dropLabel}
+          hint={c.dropHint}
+          chosenLabel={c.chosen}
+          fileError={c.fileError}
+          onText={(text) => setCsv(text)}
         />
-      </label>
+      </div>
       <p className="fieldHelp">{c.formatHint}</p>
 
       <div className="txPreview">

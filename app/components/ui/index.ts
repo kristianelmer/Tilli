@@ -20,6 +20,8 @@ export type { BannerVariant } from "./Banner";
 export { EmptyState } from "./EmptyState";
 
 export { FormField } from "./FormField";
+export { FileDropzone } from "./FileDropzone";
+export type { FileDropzoneProps } from "./FileDropzone";
 export { Select } from "./Select";
 export type { SelectOption } from "./Select";
 

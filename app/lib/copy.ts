@@ -507,9 +507,13 @@ export const ownerCopy = {
     bank: {
       title: "Importer banktransaksjoner",
       intro:
-        "Valgfritt: lim inn bankutskrift (CSV) for året, så avstemmer vi senere. Du kan hoppe over og gjøre dette når som helst.",
-      csvLabel: "Bank CSV",
-      csvHelp: "Lim inn rader fra nettbanken: dato, tekst, beløp, saldo.",
+        "Valgfritt: last opp bankutskrift (CSV) for året, så avstemmer vi senere. Du kan hoppe over og gjøre dette når som helst.",
+      csvLabel: "Bank CSV (valgfritt)",
+      csvHelp: "Last opp CSV-en fra nettbanken med kolonnene dato, tekst, beløp og saldo.",
+      dropLabel: "Slipp CSV-filen her, eller klikk for å velge",
+      dropHint: "Kun .csv-filer fra nettbanken.",
+      chosen: (fileName: string) => `Valgt fil: ${fileName}`,
+      fileError: "Dette ser ikke ut som en CSV-fil. Velg en .csv-fil eksportert fra nettbanken.",
       importedTitle: "Importert",
       importedBody: (count: number) =>
         `${count} banktransaksjoner er registrert.`,
@@ -1038,13 +1042,15 @@ export const ownerCopy = {
     import: {
       title: "Importer kontoutskrift",
       intro:
-        "Lim inn kontoutskriften som CSV. Første linje må ha kolonnene date, text og amount – balance er valgfritt.",
+        "Last opp kontoutskriften som CSV. Første linje må ha kolonnene date, text og amount – balance er valgfritt.",
       formatHint:
         "Format: date,text,amount,balance — én transaksjon per linje, dato som ÅÅÅÅ-MM-DD.",
-      placeholder:
-        "date,text,amount,balance\n2025-01-02,Inngående saldo,30000,30000\n2025-01-03,Bankgebyr,-50,29950",
+      dropLabel: "Slipp CSV-filen her, eller klikk for å velge",
+      dropHint: "Kun .csv-filer.",
+      chosen: (fileName: string) => `Valgt fil: ${fileName}`,
+      fileError: "Dette ser ikke ut som en CSV-fil. Velg en .csv-fil eksportert fra nettbanken.",
       previewTitle: "Forhåndsvisning",
-      previewEmpty: "Lim inn CSV-en for å se en forhåndsvisning.",
+      previewEmpty: "Last opp CSV-en for å se en forhåndsvisning.",
       previewCount: (n: number) =>
         `${n} ${n === 1 ? "transaksjon" : "transaksjoner"} klar til import`,
       moreRows: (n: number) => `+ ${n} flere`,

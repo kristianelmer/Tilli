@@ -3,7 +3,7 @@
 import { importBankCsv } from "../../actions";
 import {
   Banner,
-  FormField,
+  FileDropzone,
   LinkButton,
   SubmitButton,
 } from "../../components/ui";
@@ -34,14 +34,17 @@ export function BankImportForm({
         <input type="hidden" name="returnTo" value="/onboarding?step=bank" />
         <input type="hidden" name="companyId" value={companyId} />
         <input type="hidden" name="incomeYear" value={incomeYear} />
-        <FormField
-          label={c.csvLabel}
-          name="csvText"
-          multiline
-          rows={6}
-          helper={c.csvHelp}
-          optionalHint
-        />
+        <div className="field">
+          <span className="fieldLabel">{c.csvLabel}</span>
+          <FileDropzone
+            name="csvText"
+            label={c.dropLabel}
+            hint={c.dropHint}
+            chosenLabel={c.chosen}
+            fileError={c.fileError}
+          />
+          <p className="fieldHelp">{c.csvHelp}</p>
+        </div>
         <SubmitButton variant="secondary" pendingLabel={c.pending}>
           {c.cta}
         </SubmitButton>

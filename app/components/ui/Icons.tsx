@@ -110,6 +110,16 @@ export function FileText(props: IconProps) {
   );
 }
 
+export function UploadCloud(props: IconProps) {
+  return (
+    <Glyph {...props}>
+      <path d="M12 13v8" />
+      <path d="m8 17 4-4 4 4" />
+      <path d="M20 16.58A5 5 0 0 0 18 7h-1.26A8 8 0 1 0 4 15.25" />
+    </Glyph>
+  );
+}
+
 export function Inbox(props: IconProps) {
   return (
     <Glyph {...props}>
