@@ -558,11 +558,11 @@ h2 {
 }
 
 .appBrandMark {
-  background: var(--color-brand);
-  border-radius: var(--radius-sm);
+  background: url("/talli-mark.svg") center / contain no-repeat;
   display: inline-block;
-  height: 24px;
-  width: 24px;
+  flex: none;
+  height: 26px;
+  width: 26px;
 }
 
 .appNav {
