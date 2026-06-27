@@ -90,13 +90,21 @@ environment**, which matters for cost while doing action item 1 (test-env onboar
 
 ### Step 3 — Maskinporten client (Samarbeidsportalen)
 
-- [ ] Log in to **samarbeid.digdir.no** as a representative of the org.
-- [ ] Register a Maskinporten **client**; attach the **public key** — the self-generated key
-      (test) or the virksomhetssertifikat (production), per Step 2.
-- [ ] Request the per-obligation scopes (see table below). Some scopes require **API-owner
-      approval** (Skatteetaten / Brønnøysund) before they activate.
-- [ ] Note the issued **client_id** and token endpoint; verify the client-credentials flow in
-      the Maskinporten **test (ver2/sandbox)** environment first.
+- [ ] **Test access:** go to **samarbeid.digdir.no**, accept Digdir's bruksvilkår, and
+      **self-register a user** for the org using an email on the org's **registered email domain**
+      (snag for ENKs with only a personal email — register a domain email / update org contact, or
+      use ID-porten). Production uses ID-porten login with an authorised person approving access.
+- [ ] Register a Maskinporten **integration (oauth2 client)** with: `integration_type=maskinporten`,
+      `token_endpoint_auth_method=private_key_jwt`, `grant_types=jwt-bearer`, a clear `description`,
+      and **upload your own public key/JWK** (the self-generated key from Step 2; `kid` must be
+      globally unique). One client per scope is recommended.
+- [ ] Add the per-obligation scope (table below). Altinn-delegated scopes appear under **"Scopes
+      tilgjengelig for alle"**; some scopes still require **API-owner grant** (Skatteetaten /
+      Brønnøysund) before they activate. Record the auto-assigned **client_id**.
+- [ ] Smoke-test signing against the **test** token endpoint (`https://test.maskinporten.no/token`,
+      JWT `aud=https://test.maskinporten.no/`, `iss=client_id`, `exp − iat ≤ 120s`). A delegated
+      call on behalf of a company additionally needs the `consumer_org` claim / systembruker from
+      Step 4 and a Tenor subject from Step 5, so a full accepted submission comes after those.
 
 ### Step 4 — Altinn system user + access packages (systembruker + tilgangspakker)
 
