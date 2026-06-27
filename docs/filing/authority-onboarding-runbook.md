@@ -48,8 +48,12 @@ sufficient for the Maskinporten / Altinn / virksomhetssertifikat integration. (T
 - [ ] Submit **Samordnet registermelding** (Altinn form **BR-1010 / "Registrer ny verksemd"**) to
       register the ENK in **Enhetsregisteret**. Issues the **organisasjonsnummer** (ENK is usually
       faster than an AS — often days). Registration in Enhetsregisteret is free.
-- [ ] Optional **Foretaksregisteret** registration (fee) — not required for an ENK to obtain a
-      virksomhetssertifikat, but check your certificate provider's exact requirement before buying.
+- [ ] **Foretaksregisteret is not required** for Talli. An ENK only needs Foretaksregisteret if
+      it resells purchased goods, has >5 employees, operates as statsautorisert regnskapsfører/
+      revisor, or takes pant i varelager — none apply to Talli (a software service, not an
+      accountant/auditor firm). Verified: Buypass/Commfides issue a virksomhetssertifikat, and
+      Maskinporten works, on the **Enhetsregisteret** org number alone. You *may* still opt in
+      (it's a right, not a duty) for foretaksnavn protection + a firmaattest, for a one-time fee.
 - [ ] Confirm you hold the **Tilgangsstyrar (Access manager)** role on the new org in Altinn —
       required later to delegate access packages to the system user. Getting this now avoids a
       round-trip at Step 4.
