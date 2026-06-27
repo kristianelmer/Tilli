@@ -30,15 +30,26 @@ in-app evidence records described in [How this maps to Talli's gates](#how-this-
 These steps are prerequisites for all three obligations. Do them once; the per-obligation
 scopes (next section) attach on top.
 
-### Step 1 — Incorporate the AS (get an organisasjonsnummer)
+### Step 1 — Register the operating entity as an ENK (get an organisasjonsnummer)
 
-The entity that holds the Maskinporten client and acts as the system supplier.
+Talli's operating entity holds the Maskinporten client and acts as the system supplier. It does
+**not** have to be an AS — an **enkeltpersonforetak (ENK)** has an organisasjonsnummer and is
+sufficient for the Maskinporten / Altinn / virksomhetssertifikat integration. (Talli's
+*customers* must still be AS — that is the product's scope; this step is only about Talli itself.)
 
-- [ ] Draft **stiftelsesdokument + vedtekter**. Aksjeloven requires min. **NOK 30 000** aksjekapital.
-- [ ] Open an **aksjekapitalkonto**, deposit capital, obtain **bekreftelse** from bank, auditor,
-      or authorised accountant (regnskapsfører).
-- [ ] Submit **Samordnet registermelding** (Altinn form BR-1010) to **Foretaksregisteret**.
-      Issues the **organisasjonsnummer** (≈1–3 weeks).
+> Liability note: an ENK gives **no liability shield** — the innehaver is personally liable. Since
+> Talli submits statutory filings on behalf of customers and processes their financial data
+> (see the DPA / ToS in `docs/legal/`), revisit the AS question before onboarding live customers.
+> An ENK can be converted to an AS later, but the org number changes, which means re-doing
+> Steps 2–4. Plan accordingly.
+
+- [ ] **Innehaver**: a person with a Norwegian fødselsnummer / D-nummer (you). No share capital
+      and no founding document required for an ENK.
+- [ ] Submit **Samordnet registermelding** (Altinn form **BR-1010 / "Registrer ny verksemd"**) to
+      register the ENK in **Enhetsregisteret**. Issues the **organisasjonsnummer** (ENK is usually
+      faster than an AS — often days). Registration in Enhetsregisteret is free.
+- [ ] Optional **Foretaksregisteret** registration (fee) — not required for an ENK to obtain a
+      virksomhetssertifikat, but check your certificate provider's exact requirement before buying.
 - [ ] Confirm you hold the **Tilgangsstyrar (Access manager)** role on the new org in Altinn —
       required later to delegate access packages to the system user. Getting this now avoids a
       round-trip at Step 4.
@@ -121,7 +132,7 @@ credentials and the admin/step-up flow, so they are performed in the running app
 
 | Step | RF-1086 (#81) | Årsregnskap (#84) | Skattemelding (#87) |
 |---|---|---|---|
-| 1. AS incorporated (org nr) | ☐ | ☐ | ☐ |
+| 1. Operating entity registered (ENK, org nr) | ☐ | ☐ | ☐ |
 | 2. Virksomhetssertifikat | ☐ | ☐ | ☐ |
 | 3. Maskinporten client + scope | ☐ | ☐ | ☐ |
 | 4. Altinn system user + access pkg | ☐ | ☐ | ☐ |
