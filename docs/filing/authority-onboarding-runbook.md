@@ -72,16 +72,27 @@ sufficient for the Maskinporten / Altinn / virksomhetssertifikat integration. (T
       required later to delegate access packages to the system user. Getting this now avoids a
       round-trip at Step 4.
 
-### Step 2 — Enterprise certificate (virksomhetssertifikat)
+### Step 2 — Client key / certificate
 
-- [ ] Buy a **virksomhetssertifikat** from **Buypass** or **Commfides** for the org number.
-      Used to sign the Maskinporten JWT client-assertion. Keep the private key in secure,
-      production-separated storage (never in dev/local credential paths).
+Maskinporten signs the client-assertion JWT with your key. The requirement **differs by
+environment**, which matters for cost while doing action item 1 (test-env onboarding only):
+
+- **Test environment (free):** Maskinporten's test/ver2 accepts a **self-generated key pair /
+  self-signed certificate** — no CA purchase needed. Do the entire test integration this way and
+  defer spend.
+  - [ ] Generate a key pair locally, e.g. `openssl genrsa -out talli-test.key 4096` then
+        `openssl req -new -x509 -key talli-test.key -out talli-test.pem -days 1095 -subj "/CN=Talli test"`.
+  - [ ] Keep the private key secure; you upload only the **public** key/cert at Step 3 (test).
+- **Production (paid, defer until cutover):** production Maskinporten requires a CA-issued
+  **virksomhetssertifikat** from **Buypass** or **Commfides** for org 930835978 (~NOK 1 500–4 000/yr).
+  - [ ] Buy it only when moving an obligation to production. Order the **soft/file-based** cert
+        (server use), not a smartkort, and keep the key in production-separated storage.
 
 ### Step 3 — Maskinporten client (Samarbeidsportalen)
 
 - [ ] Log in to **samarbeid.digdir.no** as a representative of the org.
-- [ ] Register a Maskinporten **client**; attach the **public key** from the virksomhetssertifikat.
+- [ ] Register a Maskinporten **client**; attach the **public key** — the self-generated key
+      (test) or the virksomhetssertifikat (production), per Step 2.
 - [ ] Request the per-obligation scopes (see table below). Some scopes require **API-owner
       approval** (Skatteetaten / Brønnøysund) before they activate.
 - [ ] Note the issued **client_id** and token endpoint; verify the client-credentials flow in
