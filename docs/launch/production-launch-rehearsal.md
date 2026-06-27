@@ -1,12 +1,26 @@
 # Production Launch Rehearsal
 
 Status: prepared for final HITL rehearsal  
-Last updated: 2026-06-20  
+Last updated: 2026-06-27  
 Blocks: #88 remains open until named reviewer signoff and authority test evidence exist
 
 This runbook is the repeatable pre-launch rehearsal for Talli. It does not
 permit live direct filing. It proves the local product gates and documents the
 remaining authority/HITL blockers.
+
+## Latest Rehearsal Run (2026-06-27)
+
+The automated rehearsal command set passed end to end:
+
+| Command | Result |
+| --- | --- |
+| `npm run test:launch-rehearsal` (`TALLI_PYTHON_BIN=.venv/bin/python`) | exit 0 — 28 suites, 109 checks, 0 failures |
+| `npm run typecheck` | exit 0 |
+| `npm run build` | exit 0 |
+
+This proves every automated product/filing/security/billing/copy/policy gate is
+green. It does **not** change the launch state, which stays `production_disabled`
+until the authority test-environment evidence and named human signoffs below exist.
 
 ## Automated Rehearsal Command
 
