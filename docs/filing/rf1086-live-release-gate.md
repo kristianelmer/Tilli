@@ -1,9 +1,9 @@
 # RF-1086 Live Release Gate
 
 Status: HITL release checklist  
-Last updated: 2026-06-16  
+Last updated: 2026-06-27  
 Target issue: #81  
-Blocked by: #76 real payment collection, #80 code evidence decision
+Blockers resolved: #76 real payment collection (closed), #80 code evidence decision (closed)
 
 This checklist must pass before Talli can enable live RF-1086 submission. It does
 not enable production by itself.
@@ -32,16 +32,16 @@ Excluded live scope:
 
 | Gate | Evidence required | Current status |
 | --- | --- | --- |
-| Authority access | Maskinporten/Altinn/system-user or equivalent flow tested for Talli organization and supported company | Pending |
-| Test submission | Test-environment RF-1086 hovedskjema, underskjema, bekreft, dokumenter/feedback retrieval recorded | Pending |
+| Authority access | Maskinporten/Altinn/system-user or equivalent flow tested for Talli organization and supported company | Pending (external authority onboarding) |
+| Test submission | Test-environment RF-1086 hovedskjema, underskjema, bekreft, dokumenter/feedback retrieval recorded | Pending (external authority onboarding) |
 | Live scope | K/S/U excluded, stiftelse/no-activity only | Done in #80 |
-| Billing | Real subscription/payment/filing-package gate implemented and test charged/refunded | Pending #76 |
-| Security | Fresh MFA/step-up, human security review, production credential gate | Step-up implemented; human review pending |
+| Billing | Real subscription/payment/filing-package gate implemented and test charged/refunded | Implemented in #76 (`productionBillingGate` + payment/refund workflow, #76 closed); live test charge/refund evidence still to attach |
+| Security | Fresh MFA/step-up, human security review, production credential gate | Step-up (#73) and RLS/storage audit (#74) implemented and closed; human security review signoff pending |
 | Authority confirmation | Owner confirms authority for obligation/company before submission | Implemented as model/UI gate; live flow pending |
 | Final preview confirmation | Owner confirms final preview before API calls | Implemented as submission state; live flow pending |
 | Idempotency | Endpoint/body hash/idempotency key persisted for each authority call | Implemented in submission model/tests |
 | Feedback/receipt archive | Official references, feedback document ids, receipt id persisted | Simulation seam implemented; official evidence pending |
-| Human signoff | Named reviewer signs production release decision | Pending |
+| Human signoff | Named reviewer signs production release decision | Pending (`rf1086_authority` launch signoff) |
 
 Code gate anchors:
 
@@ -61,6 +61,23 @@ npm run test:security
 npm run test:supabase
 npm run test:backup-restore
 ```
+
+## Code Gate Verification (2026-06-27)
+
+Latest run of the code-side release evidence (all green):
+
+| Suite | Result |
+| --- | --- |
+| `uv run python -m unittest tests.test_rf1086 tests.test_rf1086_submission tests.test_submission_and_billing` | 25 passed |
+| `npm run test:rf1086:submission` (bridge; `TALLI_PYTHON_BIN=.venv/bin/python`) | 7 passed |
+| `npm run test:security` | 4 passed |
+| `npm run test:filing-release-gate` | 3 passed |
+| `npm run test:backup-restore` | 4 passed |
+
+`npm run test:supabase` requires Supabase env and is run in an environment with
+credentials. This code-gate verification proves the deterministic logic is release-ready;
+it does **not** substitute for the external authority access, test submission, and human
+release signoff rows above, which keep production disabled.
 
 ## Release Decision Template
 
