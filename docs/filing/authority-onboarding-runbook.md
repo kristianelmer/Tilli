@@ -131,9 +131,18 @@ environment**, which matters for cost while doing action item 1 (test-env onboar
 |---|---|---|---|---|
 | Aksjonærregisteroppgaven (RF-1086) | #81 | `aksjonaerregisteroppgaven` | `skatteetaten:innrapporteringaksjonaerregisteroppgave` | Skatteetaten test env; POST 1086H / 1086U / bekreft, GET dokumenter |
 | Årsregnskap (RR-0002) | #84 | `aarsregnskap` | `altinn:instances.read`, `altinn:instances.write` | Regnskapsregisteret machine API via Altinn3 **TT02**; system user fills + locks, **ID-porten** signs (hybrid); `dataFormatId=1266` |
-| Skattemelding for AS | #87 | `skattemelding` | `skatteetaten:formueinntekt/skattemelding`, `altinn:instances.read`, `altinn:instances.write` | Skatteetaten validation + Altinn3 app `skd/formueinntekt-skattemelding-v2`, external test env; 2025 schema `skattemeldingUpersonlig_v5` / `naeringsspesifikasjon_v6` |
+| Skattemelding for AS | #87 | `skattemelding` | `skatteetaten:skattemeldingupersonlig` (the documented scope for the AS/"upersonlig" tax return; + `altinn:instances.*`) | Skatteetaten external test env; system-supplier submission. ⚠️ Scope requires **Skatteetaten approval + DPA + legal basis** (confidential data) and the upersonlig API is **not adapted for system-user/end-user display** — confirm the supported owner-managed path with Skatteetaten first. Altinn3 app `skd/formueinntekt-skattemelding-v2`; 2025 schema `skattemeldingUpersonlig_v5` / `naeringsspesifikasjon_v6` |
 
 Trace any payload fields to the maps/evidence registers in `docs/filing/` — do not invent fields.
+
+**The access process differs per obligation** — they are not three identical scope clicks:
+- **RF-1086** — a plain Maskinporten scope requested in Samarbeidsportalen (Altinn-delegated).
+- **Årsregnskap** — **not** a Maskinporten scope: set up an **Altinn systembruker** (Profil →
+  Avanserte innstillinger → Programmer og systembrukere) in **TT02** and attach the
+  **Regnskapsregisteret – innsending av årsregnskap** access package; signing needs **ID-porten**.
+- **Skattemelding** — Skatteetaten grants `skatteetaten:skattemeldingupersonlig` explicitly:
+  register as **systemleverandør**, sign a **databehandleravtale**, document a **legal basis**,
+  then request the scope/rettighetspakke. Start this first — it is the slowest-lead gate.
 
 > RF-1086 live scope is intentionally narrow: only `stiftelse` / no-activity (event code `N`).
 > K/S/U (kjøp/salg/utbytte) stay excluded (`RF1086_EVENT_UNSUPPORTED`) until Skatteetaten
