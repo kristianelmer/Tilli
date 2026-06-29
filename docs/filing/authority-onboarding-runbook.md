@@ -118,9 +118,17 @@ environment**, which matters for cost while doing action item 1 (test-env onboar
       "Integrasjoner" in the *test* environment → Ny integrasjon → Difi-tjeneste = Maskinporten**.
       Add the public key under **"Egne public nøkler"** at the bottom of the client page (PEM must be
       converted to JWK first — see the `node` one-liner in the team notes).
-- [ ] Add the per-obligation scope (table below). Altinn-delegated scopes appear under **"Scopes
-      tilgjengelig for alle"**; some scopes still require **API-owner grant** (Skatteetaten /
-      Brønnøysund) before they activate. Record the auto-assigned **client_id**.
+- [ ] Add the per-obligation scope (table below). **None of the filing scopes are self-serve** — when
+      you add them the portal warns *"Det er lagt til scopes på klienten som virksomheten din ikke har
+      tilgang til … Kontakt API-tilbyder for å be om tilgang."* You can still **save the client** (the
+      scopes attach as pending) — do so to obtain the **client_id**, which you need for the access
+      requests. Then request access per scope:
+      - **RF-1086** (`skatteetaten:innrapporteringaksjonaerregisteroppgave` +
+        `…aksjonaerregisteroppgavefilopplasting`, the file-upload variant) → **Skatteetaten** grants the
+        scope to your org / client; for a real submission a customer also delegates via Altinn.
+      - **`altinn:authentication/systemregister.write`** (needed for Step 4a) → **not listed at all**;
+        it is strictly controlled. Email **servicedesk@altinn.no** with client_id, org number, "TT02",
+        and that you need the scope as a *systemleverandør* to register systems. Cannot be self-granted.
 - [ ] Smoke-test signing against the **test** token endpoint (`https://test.maskinporten.no/token`,
       JWT `aud=https://test.maskinporten.no/`, `iss=client_id`, `exp − iat ≤ 120s`). A delegated
       call on behalf of a company additionally needs the `consumer_org` claim / systembruker from
