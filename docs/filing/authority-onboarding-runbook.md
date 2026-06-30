@@ -153,6 +153,11 @@ right *"Tilgang til testmiljøet for ID-porten/Maskinporten Selvbetjening"* was 
   - ⏭️ **Not yet attached:** `skatteetaten:formueinntekt/skattemelding` (#87). SKD grants don't
     auto-activate on the client — once granted, **add this scope to the client** in the Digdir
     self-service portal (and `altinn:instances.read` / `altinn:instances.write` for the Altinn3 app).
+  - ⏭️ **Also needed for vendor-initiated Step 4b** (systembruker request from the app):
+    `altinn:authentication/systemuser.request.write` **and** `altinn:authentication/systemuser.request.read`.
+    These are **not** in the Altinn request #3 (which only asked for `systemregister.write`) — send a
+    follow-up to `servicedesk@altinn.no` to add them, then attach them to the client. The
+    user-initiated portal path (customer self-creates the systembruker) does **not** need these.
 - **Signing smoke-test PASSED:** `POST https://test.maskinporten.no/token` with a `private_key_jwt`
   assertion (`aud=https://test.maskinporten.no/`, `iss=client_id`, `exp−iat=30 s`) returned
   **HTTP 400 `invalid_scope` (MP-250)** — i.e. Maskinporten authenticated the client/key/kid
@@ -169,7 +174,8 @@ right *"Tilgang til testmiljøet for ID-porten/Maskinporten Selvbetjening"* was 
 |---|---|---|---|---|---|
 | 2026-06-30 | #81 RF-1086 | Skatteetaten | email `altinnreetablering@skatteetaten.no` (overgangsfase; eksternjira brukerstøtte requires a brukerkonto we don't yet have) | Test access to scopes `skatteetaten:innrapporteringaksjonaerregisteroppgave` + `…filopplasting` for org 930835978 / client_id `7166e743-978e-4a60-8a2d-0a5c00fe6ad0` | ⏳ sent, awaiting grant |
 | 2026-06-30 | #87 skattemelding | Skatteetaten | same thread (`altinnreetablering@skatteetaten.no`) | scope `skatteetaten:formueinntekt/skattemelding` (test) — verified 2026-06-30 from Skatteetaten api-dokumentasjon; Altinn3 app `skd/formueinntekt-skattemelding-v2`, systembruker resource `app_skd_formueinntekt-skattemelding-v2` | ⏳ sent, awaiting grant |
-| _drafted_ | #84/#87 systembruker | Altinn | email `servicedesk@altinn.no` | (1) grant `altinn:authentication/systemregister.write` (TT02) + (2) enable real org 930835978 in TT02 systemregister, for client_id above | 📋 drafted, ready to send |
+| 2026-06-30 | #84/#87 systembruker | Altinn | email `servicedesk@altinn.no` | (1) grant `altinn:authentication/systemregister.write` (TT02) + (2) enable real org 930835978 in TT02 systemregister, for client_id above | ⏳ sent, awaiting grant |
+| _follow-up needed_ | #81/#84/#87 systembruker (vendor-initiated) | Altinn | email `servicedesk@altinn.no` (same thread) | also grant `altinn:authentication/systemuser.request.write` + `…/systemuser.request.read` (TT02) for client_id above — required for vendor-initiated Step 4b `/systemuser/request/vendor`; **not** included in request above | 📋 to send |
 
 Note: the Skatteetaten SBS "Bestill tilgang" link routes to the eksternjira brukerstøtte
 (`eksternjira.sits.no`), which needs a per-virksomhet brukerkonto. Until that account exists, the
@@ -251,12 +257,50 @@ system that bundles all three across fullmaktsområder.
     **Profil → Tilgangsstyring → Systemtilgang / Systembrukere → "Opprett ny systembruker"**, picks
     **Talli** from the list, and approves the pre-defined access packages. (The company must hold the
     authority to delegate every package requested — it's an all-or-nothing "OG-forhold".)
-  - **Vendor-initiated (Talli's preferred, from the app):**
-    `POST .../authentication/api/v1/systemuser/request/vendor` with `systemId`, the customer's
-    `partyOrgNo`, and `accessPackages` → returns a `confirmUrl` deeplink → Talli hands the link to the
-    customer → customer approves → request status flips to `Accepted`.
-- [ ] For the TT02 rehearsal, register Talli's system (4a), then have the **Tenor test AS** (Step 5)
-      create the systembruker (4b, user-initiated is simplest for a first pass).
+  - **Vendor-initiated (Talli's preferred, from the app):** standard `/vendor` endpoint (use this — *not*
+    `/vendor/agent`, which is only for klientsystem / regnskapsfører-for-many-clients). Flow:
+
+    1. **Request token** for Talli-as-itself (no `authorization_details`), scope
+       `altinn:authentication/systemuser.request.write`.
+    2. **Create the request:**
+       ```http
+       POST https://platform.tt02.altinn.no/authentication/api/v1/systemuser/request/vendor
+       Authorization: Bearer <token w/ systemuser.request.write>
+       Content-Type: application/json
+       ```
+       ```json
+       {
+         "externalRef": "talli_rf1086_<customerOrgNo>",
+         "systemId": "930835978_talli",
+         "partyOrgNo": "<customer holding-AS orgNo, 9 digits>",
+         "integrationTitle": "Talli aksjonærregisteroppgave",
+         "rights": [
+           { "Resource": [ { "id": "urn:altinn:resource", "value": "ske-innrapportering-aksjonaerregisteroppgave" } ] }
+         ],
+         "redirectUrl": "<a pre-registered allowedredirecturl, optional>"
+       }
+       ```
+       Use `rights` (not `accessPackages`) because the 4a system def uses the single right resource.
+       Response is `status: "New"` + a **`confirmUrl`** (TT02 domain
+       `https://am.ui.tt02.altinn.no/accessmanagement/ui/systemuser/request?id=<requestId>`).
+    3. **Customer approves:** hand the `confirmUrl` to the company; an access-manager for the org opens it,
+       sees the requested right, and approves → status flips `New → Accepted` and the systembruker is
+       created automatically. (Other terminal states: `Rejected`, `TimedOut` after 10 days.)
+    4. **Poll status** by request id
+       `GET .../systemuser/request/vendor/{requestId}` or idempotently by ref
+       `GET .../systemuser/request/vendor/byexternalref/{systemId}/{orgNo}/{externalRef}`
+       (scope `altinn:authentication/systemuser.request.read`).
+    5. **Retrieve the created systembruker UUID** (needed only if you pin tokens by `externalRef`):
+       `GET .../systemuser/vendor/byquery?system-id=930835978_talli&orgno=<customerOrgNo>` →
+       `{ "id": "<systemuser UUID>", "userType": "standard", … }`.
+- [ ] For the TT02 rehearsal, register Talli's system (4a), then create the systembruker for the
+      **Tenor test AS** (Step 5) — vendor-initiated `/vendor` request is closest to Talli's real owner
+      flow (the owner approves a `confirmUrl`); user-initiated portal is a simpler fallback for a first pass.
+
+> Sources: Altinn systemuserrequest guide + API reference
+> (`docs.altinn.studio/nb/authorization/guides/system-vendor/system-user/systemuserrequest/`,
+> `.../api/authentication/systemuserapi/systemuserrequest/external/`, `.../byquery/`);
+> Skatteetaten `api-dokumentasjon/docs/om/systembruker.md`.
 
 ### Step 5 — Synthetic test subjects (Tenor)
 
@@ -305,6 +349,103 @@ For each obligation, once Steps 1–5 are done and the scope is active:
 3. [ ] Confirm the authority returns an **accepted** status, a **receipt reference**, and an
        **archive reference**. Capture all three — they are required evidence.
 
+### RF-1086 (#81) — concrete TT02 call sequence
+
+This is the rehearsal Talli already models in `holding_core.rf1086_submission`
+(`prepare_rf1086_api_calls`) and documents in `rf1086-production-submission-runbook.md`. The
+test-environment differences are: the `api-test.sits.no` base URL, the synthetic Tenor subject,
+and the test Maskinporten token. **Live test scope = stiftelse / no-activity only** (the
+production gate excludes K/S/U share events; keep the rehearsal to an allowed shape).
+
+**Generate + validate the XML locally first (Talli CLI, no network):**
+
+```bash
+# 1. Build the RF-1086 hovedskjema + underskjema XML files from a deterministic case
+uv run python -m holding_cli.main simulate-aksjonaerregister --case case.json --out out/rf1086
+
+# 2. Validate the generated files against the official XSDs (docs/filing/*.xsd) before sending
+uv run python -m holding_cli.main validate-rf1086-xml \
+  --hovedskjema out/rf1086/1086H.xml \
+  --underskjema out/rf1086/1086U-*.xml
+
+# 3. Preview the exact submission/receipt plan (endpoints, order, idempotency keys)
+cat preview.json | uv run python -m holding_cli.main simulate-rf1086-submission --stdin-json
+```
+
+**Acquire the test token (Maskinporten, on behalf of the Tenor test AS):**
+
+The SKD RF-1086 API takes the **Maskinporten access token directly** — there is **no Altinn token
+exchange** for this API. The `private_key_jwt` grant signed with `~/talli-test.key`
+(kid `2d275f93-10a2-4839-993e-b14da2b84ad8`) must carry an `authorization_details` claim of type
+`urn:altinn:systemuser` naming the customer org, so Maskinporten resolves the Step-4b systembruker
+and enriches the returned token with `systemuser_id` / `system_id`:
+
+```jsonc
+// JWT grant claims (header: { "alg": "RS256", "kid": "<kid>" })
+{
+  "iss": "7166e743-978e-4a60-8a2d-0a5c00fe6ad0",   // = sub = Talli's client_id
+  "sub": "7166e743-978e-4a60-8a2d-0a5c00fe6ad0",
+  "aud": "https://test.maskinporten.no/",           // trailing slash required
+  "scope": "skatteetaten:innrapporteringaksjonaerregisteroppgave",
+  "iat": <now>, "exp": <now+119>, "jti": "<uuid>",   // exp-iat ≤ 120s
+  "authorization_details": [
+    { "type": "urn:altinn:systemuser",
+      "systemuser_org": { "authority": "iso6523-actorid-upis", "ID": "0192:<customerOrgNo>" } }
+  ]
+}
+```
+
+```bash
+# POST the signed assertion to the test token endpoint
+ACCESS_TOKEN=$(curl -sS -X POST https://test.maskinporten.no/token \
+  -H "Content-Type: application/x-www-form-urlencoded" \
+  --data-urlencode "grant_type=urn:ietf:params:oauth:grant-type:jwt-bearer" \
+  --data-urlencode "assertion=${SIGNED_JWT}" | jq -r '.access_token')
+```
+
+The returned token's `authorization_details` will include `systemuser_id` + `system_id`, `consumer.ID`
+= Talli's vendor org `0192:930835978`, and `systemuser_org.ID` = the customer. (Same flow proven by
+the Step-3 smoke-test, which returned MP-250 `invalid_scope` only because the scope grant was still
+pending — auth + signing were already correct.) Reference: Altinn usetoken guide + Skatteetaten
+`systembruker.md`.
+
+**POST the filing in order** (base `https://api-test.sits.no/api/aksjonaerregister/v1/{inntektsaar}`,
+one new `idempotencyKey` UUID per distinct logical call/body):
+
+```bash
+BASE="https://api-test.sits.no/api/aksjonaerregister/v1/${INNTEKTSAAR}"
+H_AUTH="Authorization: Bearer ${ACCESS_TOKEN}"
+H_ACCEPT="Accept: application/json"
+H_XML="Content-Type: application/xml"
+
+# (a) Hovedskjema → returns {hovedskjemaid}
+HOVEDID=$(curl -sS -X POST "$BASE/1086H" \
+  -H "$H_AUTH" -H "$H_ACCEPT" -H "$H_XML" -H "idempotencyKey: $(uuidgen)" \
+  --data-binary @out/rf1086/1086H.xml | jq -r '.hovedskjemaid')
+
+# (b) Underskjema — one POST per shareholder (200, no body)
+curl -sS -X POST "$BASE/$HOVEDID/1086U" \
+  -H "$H_AUTH" -H "$H_ACCEPT" -H "$H_XML" -H "idempotencyKey: $(uuidgen)" \
+  --data-binary @out/rf1086/1086U-<shareholderId>.xml
+
+# (c) Bekreft — pass the underskjema count; returns the receipt references
+curl -sS -X POST "$BASE/$HOVEDID/bekreft?antall_underskjema=${COUNT}" \
+  -H "$H_AUTH" -H "$H_ACCEPT" -H "idempotencyKey: $(uuidgen)"
+  # → oppgavegiversLeveranseReferanse, dialogId, forsendelseId
+
+# (d) Dokumenter — retrieve feedback / archive references
+curl -sS -X GET "$BASE/$HOVEDID/dokumenter" -H "$H_AUTH" -H "$H_ACCEPT"
+```
+
+**Capture as evidence** (maps to `authority_test_runs`, see "How this maps to Talli's gates"):
+- **Accepted status** — the `bekreft` 200 response.
+- **Receipt reference** — `oppgavegiversLeveranseReferanse` (and `forsendelseId`).
+- **Archive reference** — the feedback document id(s) from `GET /dokumenter`.
+
+Idempotency, retry, and failure-handling rules are authoritative in
+`rf1086-production-submission-runbook.md` (§Idempotency Policy, §Failure Handling) — the same
+rules apply in test; only the base URL and subject change.
+
 ## How this maps to Talli's gates
 
 `buildFilingReleaseGates` (`app/lib/filing-release-gate.ts`) fail-closes each obligation to
@@ -335,7 +476,7 @@ credentials and the admin/step-up flow, so they are performed in the running app
 | 1. Operating entity registered (ENK, org nr) | ☑ | ☑ | ☑ |
 | 2. Virksomhetssertifikat (test self-signed) | ☑ | ☑ | ☑ |
 | 3. Maskinporten client + scope | ◑ client+key done; scope `Tilgang mangler` | ◑ | ◑ |
-| 4. Altinn system user + access pkg | ☐ | ☐ | ☐ |
+| 4. Altinn system user + access pkg | ◑ 4a payload + 4b vendor flow drafted; awaiting `systemregister.write` + `systemuser.request.*` grants + TT02 org enablement | ◑ | ◑ |
 | 5. Tenor test subjects | ☐ | ☐ | ☐ |
 | 6. Accepted test submission | ☐ | ☐ | ☐ |
 | 7. `authority_permissions` recorded | ☐ | ☐ | ☐ |
@@ -346,6 +487,13 @@ Step 3 status (2026-06-30): one shared TT02 client `7166e743-978e-4a60-8a2d-0a5c
 (kid `2d275f93-10a2-4839-993e-b14da2b84ad8`) created with all three scopes attached as pending;
 Maskinporten signing smoke-test passed (auth OK, only scope grant missing). See the "Live state"
 block under Step 3.
+
+Step 4 status (2026-06-30): both sides drafted and source-verified — 4a systemregister payload
+embedded above; 4b vendor-initiated `/systemuser/request/vendor` flow (request body → `confirmUrl`
+→ poll → `byquery` for the systembruker UUID) documented; RF-1086 token confirmed to use
+`authorization_details` type `urn:altinn:systemuser` with the Maskinporten token used **directly**
+against the SKD API (no Altinn exchange). Blocked only on the Altinn grants: `systemregister.write`
+(requested) plus `systemuser.request.write`/`.read` (follow-up to send) and TT02 org enablement.
 
 Steps 1–5 are shared and only need to be done once; the per-obligation columns diverge from
 Step 3 (scopes) onward.
