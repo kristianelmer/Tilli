@@ -150,6 +150,9 @@ right *"Tilgang til testmiljøet for ID-porten/Maskinporten Selvbetjening"* was 
   `skatteetaten:innrapporteringaksjonaerregisteroppgave`,
   `skatteetaten:innrapporteringaksjonaerregisteroppgavefilopplasting`,
   `altinn:authentication/systemregister.write`.
+  - ⏭️ **Not yet attached:** `skatteetaten:formueinntekt/skattemelding` (#87). SKD grants don't
+    auto-activate on the client — once granted, **add this scope to the client** in the Digdir
+    self-service portal (and `altinn:instances.read` / `altinn:instances.write` for the Altinn3 app).
 - **Signing smoke-test PASSED:** `POST https://test.maskinporten.no/token` with a `private_key_jwt`
   assertion (`aud=https://test.maskinporten.no/`, `iss=client_id`, `exp−iat=30 s`) returned
   **HTTP 400 `invalid_scope` (MP-250)** — i.e. Maskinporten authenticated the client/key/kid
@@ -165,7 +168,7 @@ right *"Tilgang til testmiljøet for ID-porten/Maskinporten Selvbetjening"* was 
 | Date | Obligation | Authority | Channel | Request | Status |
 |---|---|---|---|---|---|
 | 2026-06-30 | #81 RF-1086 | Skatteetaten | email `altinnreetablering@skatteetaten.no` (overgangsfase; eksternjira brukerstøtte requires a brukerkonto we don't yet have) | Test access to scopes `skatteetaten:innrapporteringaksjonaerregisteroppgave` + `…filopplasting` for org 930835978 / client_id `7166e743-978e-4a60-8a2d-0a5c00fe6ad0` | ⏳ sent, awaiting grant |
-| _pending_ | #87 skattemelding | Skatteetaten | same Skatteetaten thread (consolidate) | scope `skatteetaten:formueinntekt/skattemelding` (test) — verified 2026-06-30 from Skatteetaten api-dokumentasjon; Altinn3 app `skd/formueinntekt-skattemelding-v2`, systembruker resource `app_skd_formueinntekt-skattemelding-v2` | ☐ not sent (ready to send) |
+| 2026-06-30 | #87 skattemelding | Skatteetaten | same thread (`altinnreetablering@skatteetaten.no`) | scope `skatteetaten:formueinntekt/skattemelding` (test) — verified 2026-06-30 from Skatteetaten api-dokumentasjon; Altinn3 app `skd/formueinntekt-skattemelding-v2`, systembruker resource `app_skd_formueinntekt-skattemelding-v2` | ⏳ sent, awaiting grant |
 | _pending_ | #84/#87 systembruker | Altinn | email `servicedesk@altinn.no` | grant `altinn:authentication/systemregister.write` (TT02) for org 930835978 / client_id above | ☐ not sent |
 
 Note: the Skatteetaten SBS "Bestill tilgang" link routes to the eksternjira brukerstøtte
