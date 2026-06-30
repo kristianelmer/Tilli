@@ -126,13 +126,39 @@ environment**, which matters for cost while doing action item 1 (test-env onboar
       - **RF-1086** (`skatteetaten:innrapporteringaksjonaerregisteroppgave` +
         `…aksjonaerregisteroppgavefilopplasting`, the file-upload variant) → **Skatteetaten** grants the
         scope to your org / client; for a real submission a customer also delegates via Altinn.
-      - **`altinn:authentication/systemregister.write`** (needed for Step 4a) → **not listed at all**;
-        it is strictly controlled. Email **servicedesk@altinn.no** with client_id, org number, "TT02",
-        and that you need the scope as a *systemleverandør* to register systems. Cannot be self-granted.
+      - **`altinn:authentication/systemregister.write`** (needed for Step 4a) → it **is** selectable in
+        the TT02 self-service scope picker (search `systemregister`), but it still attaches as
+        **"Tilgang mangler"** like the filing scopes — it cannot be self-granted. Email
+        **servicedesk@altinn.no** with client_id, org number, "TT02", and that you need the scope as a
+        *systemleverandør* to register systems.
 - [ ] Smoke-test signing against the **test** token endpoint (`https://test.maskinporten.no/token`,
       JWT `aud=https://test.maskinporten.no/`, `iss=client_id`, `exp − iat ≤ 120s`). A delegated
       call on behalf of a company additionally needs the `consumer_org` claim / systembruker from
       Step 4 and a Tenor subject from Step 5, so a full accepted submission comes after those.
+
+#### Live state — TT02 Maskinporten test client (2026-06-30)
+
+Created via **sjolvbetjening.test.samarbeid.digdir.no** (the TT02 self-service unlocked once Altinn
+right *"Tilgang til testmiljøet for ID-porten/Maskinporten Selvbetjening"* was delegated to self).
+
+- **Operating org:** ELMER WELFIS, org nr **930835978** (ENK).
+- **client_id:** `7166e743-978e-4a60-8a2d-0a5c00fe6ad0` (Maskinporten, app type `web`,
+  `private_key_jwt`, grant `urn:ietf:params:oauth:grant-type:jwt-bearer`, access-token lifetime 120 s).
+- **Public key kid:** `2d275f93-10a2-4839-993e-b14da2b84ad8` (RS256/RSA, expires 30.06.2027), derived
+  from `~/talli-test.pem` and uploaded under "Egne public nøkler". JWK saved at `~/talli-test.jwk.json`.
+- **Scopes attached (all `Tilgang mangler` — awaiting external grants):**
+  `skatteetaten:innrapporteringaksjonaerregisteroppgave`,
+  `skatteetaten:innrapporteringaksjonaerregisteroppgavefilopplasting`,
+  `altinn:authentication/systemregister.write`.
+- **Signing smoke-test PASSED:** `POST https://test.maskinporten.no/token` with a `private_key_jwt`
+  assertion (`aud=https://test.maskinporten.no/`, `iss=client_id`, `exp−iat=30 s`) returned
+  **HTTP 400 `invalid_scope` (MP-250)** — i.e. Maskinporten authenticated the client/key/kid
+  successfully and only the scope grant is missing. This proves key + kid + client_id + JWT signing
+  work end-to-end.
+- **Next external requests:** (1) order RF-1086 scope access at the Skatteetaten SBS page
+  (`…/aksjonarregisteroppgaven-sbs/#bestill-tilgang-til-tjenesten-krever-innlogging`, requires login);
+  (2) email `servicedesk@altinn.no` for `systemregister.write`. Note: RF-1086 also "krever systemtilgang
+  med systembruker", so Step 4 (systembruker on a Tenor test AS) is on #81's path too, not only #84/#87.
 
 ### Step 4 — Altinn system user + access packages (systembruker + tilgangspakker)
 
@@ -251,15 +277,20 @@ credentials and the admin/step-up flow, so they are performed in the running app
 
 | Step | RF-1086 (#81) | Årsregnskap (#84) | Skattemelding (#87) |
 |---|---|---|---|
-| 1. Operating entity registered (ENK, org nr) | ☐ | ☐ | ☐ |
-| 2. Virksomhetssertifikat | ☐ | ☐ | ☐ |
-| 3. Maskinporten client + scope | ☐ | ☐ | ☐ |
+| 1. Operating entity registered (ENK, org nr) | ☑ | ☑ | ☑ |
+| 2. Virksomhetssertifikat (test self-signed) | ☑ | ☑ | ☑ |
+| 3. Maskinporten client + scope | ◑ client+key done; scope `Tilgang mangler` | ◑ | ◑ |
 | 4. Altinn system user + access pkg | ☐ | ☐ | ☐ |
 | 5. Tenor test subjects | ☐ | ☐ | ☐ |
 | 6. Accepted test submission | ☐ | ☐ | ☐ |
 | 7. `authority_permissions` recorded | ☐ | ☐ | ☐ |
 | 8. `authority_test_runs` accepted | ☐ | ☐ | ☐ |
 | 9. `*_authority` launch signoff | ☐ | ☐ | ☐ |
+
+Step 3 status (2026-06-30): one shared TT02 client `7166e743-978e-4a60-8a2d-0a5c00fe6ad0`
+(kid `2d275f93-10a2-4839-993e-b14da2b84ad8`) created with all three scopes attached as pending;
+Maskinporten signing smoke-test passed (auth OK, only scope grant missing). See the "Live state"
+block under Step 3.
 
 Steps 1–5 are shared and only need to be done once; the per-obligation columns diverge from
 Step 3 (scopes) onward.
