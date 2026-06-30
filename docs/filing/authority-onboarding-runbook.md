@@ -207,6 +207,45 @@ fields (see systemregistration guide):
   - ⚠️ **TT02 caveat:** to use a real org number in TT02 you may need to have it enabled there —
     email **servicedesk@altinn.no** to get the ENK org registered in TT02 if the call rejects the org.
 
+**4a — concrete payload (RF-1086 rehearsal, owner-managed single right).** Drafted 2026-06-30 for the
+TT02 client. Uses the single right `ske-innrapportering-aksjonaerregisteroppgave` (one fullmaktsområde —
+cleanest for the first end-to-end test; mixing services across fullmaktsområder can break the customer's
+all-or-nothing delegation, esp. for klientsystemer):
+
+```json
+{
+  "id": "930835978_talli",
+  "vendor": { "authority": "iso6523-actorid-upis", "ID": "0192:930835978" },
+  "name": { "nb": "Talli", "nn": "Talli", "en": "Talli" },
+  "description": {
+    "nb": "Talli leverer aksjonærregisteroppgaven (RF-1086) for enkle holdingselskap (AS) på vegne av selskapet selv.",
+    "nn": "Talli leverer aksjonærregisteroppgåva (RF-1086) for enkle holdingselskap (AS) på vegne av selskapet sjølv.",
+    "en": "Talli files the shareholder register statement (RF-1086) for simple holding companies (AS) on behalf of the company itself."
+  },
+  "rights": [
+    { "resource": [ { "id": "urn:altinn:resource", "value": "ske-innrapportering-aksjonaerregisteroppgave" } ] }
+  ],
+  "accessPackages": [],
+  "clientId": [ "7166e743-978e-4a60-8a2d-0a5c00fe6ad0" ],
+  "allowedredirecturls": [],
+  "isVisible": true
+}
+```
+
+Send it once `altinn:authentication/systemregister.write` is granted and the org is enabled in TT02:
+1. Get a Maskinporten **test** token with scope `altinn:authentication/systemregister.write`
+   (same `private_key_jwt` flow proven in Step 3's smoke-test; `aud=https://test.maskinporten.no/`).
+2. `POST https://platform.tt02.altinn.no/authentication/api/v1/systemregister/vendor`
+   with `Authorization: Bearer <token>`, `Content-Type: application/json`, body = the payload above.
+   (PUT the **full** payload to edit later — PUT overwrites the whole definition.)
+
+**Extending to #87 / #84 later (PUT full payload):** add the skattemelding submission resource
+`app_skd_formueinntekt-skattemelding-v2` and the Regnskapsregisteret årsregnskap right/package as
+additional `rights` / `accessPackages`. Because a customer must be able to delegate **every** requested
+right (OG-forhold), prefer **per-obligation system definitions or a minimal set per test** over one
+system that bundles all three across fullmaktsområder.
+
+
 **4b — Customer side (per company): create the systembruker.** Two ways:
   - **User-initiated (portal):** the company logs into Altinn (**tt02.altinn.no**), selects the org, then
     **Profil → Tilgangsstyring → Systemtilgang / Systembrukere → "Opprett ny systembruker"**, picks
