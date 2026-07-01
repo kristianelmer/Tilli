@@ -307,6 +307,18 @@ system that bundles all three across fullmaktsområder.
       **Tenor test AS** (Step 5) — vendor-initiated `/vendor` request is closest to Talli's real owner
       flow (the owner approves a `confirmUrl`); user-initiated portal is a simpler fallback for a first pass.
 
+> ✅ **4b request created 2026-07-01 (live TT02).** `POST .../systemuser/request/vendor` with a
+> `systemuser.request.write` token → **HTTP 201**, `status: "New"`, for customer **FLINK SYMPATISK
+> TIGER AS** (org **311093363**, a Tenor synthetic AS tagged `testinnsendingSkattEnhet`):
+> - `id` (request id): `fa273092-21af-4856-96d3-c95d1f3f0efe`
+> - `externalRef`: `talli_rf1086_311093363`
+> - `confirmUrl`: `https://am.ui.tt02.altinn.no/accessmanagement/ui/systemuser/request?id=fa273092-21af-4856-96d3-c95d1f3f0efe&DONTCHOOSEREPORTEE=true`
+>
+> **Awaiting approval:** a role-holder for org 311093363 (daglig leder / hovedadministrator) must open
+> the `confirmUrl`, log into Altinn TT02 via **TestID** (synthetic person), and approve → status flips
+> `New → Accepted` and the systembruker is created. Then `GET .../systemuser/vendor/byquery` returns the
+> systembruker UUID. Created via `/tmp/talli-systemuser-request.py 311093363`.
+
 > Sources: Altinn systemuserrequest guide + API reference
 > (`docs.altinn.studio/nb/authorization/guides/system-vendor/system-user/systemuserrequest/`,
 > `.../api/authentication/systemuserapi/systemuserrequest/external/`, `.../byquery/`);
@@ -314,8 +326,13 @@ system that bundles all three across fullmaktsområder.
 
 ### Step 5 — Synthetic test subjects (Tenor)
 
-- [ ] Obtain **Tenor** synthetic test organisations/persons for the test environments. Never
-      use real customer data in TT02 / Skatteetaten test env.
+- [x] **2026-07-01:** Tenor testdatasøk (`testdata.skatteetaten.no/web/testnorge/`, ID-porten login) →
+      **Virksomhet** tab → Enhetsregisteret & Foretaksregisteret, `organisasjonsform.kode : "AS"`.
+      Selected **FLINK SYMPATISK TIGER AS**, org **311093363** (OSLO), tagged `testinnsendingSkattEnhet`
+      (provisioned for Skatteetaten test-innsending) — used as the RF-1086 rehearsal customer in Step 4b.
+      Still need its **role-holder** (daglig leder / hovedadministrator) fødselsnummer from the
+      **Relasjoner** tab to log in via TestID and approve the systembruker `confirmUrl`.
+- [ ] Never use real customer data in TT02 / Skatteetaten test env.
 
 ## Per-obligation scopes and test surfaces
 
@@ -486,8 +503,8 @@ credentials and the admin/step-up flow, so they are performed in the running app
 | 1. Operating entity registered (ENK, org nr) | ☑ | ☑ | ☑ |
 | 2. Virksomhetssertifikat (test self-signed) | ☑ | ☑ | ☑ |
 | 3. Maskinporten client + scope | ◑ client+key done; scope `Tilgang mangler` | ◑ | ◑ |
-| 4. Altinn system user + access pkg | ◑ **4a DONE** (system `930835978_talli` registered); all 3 Altinn scopes active on client; 4b needs a Tenor test AS | ◑ 4a done (shared system); 4b + årsregnskap pkg pending | ◑ 4a done (shared system); 4b + skattemelding resource pending |
-| 5. Tenor test subjects | ☐ | ☐ | ☐ |
+| 4. Altinn system user + access pkg | ◑ **4a DONE**; **4b request created** (`fa273092-…`, status New) for Tenor AS 311093363 — awaiting customer approval | ◑ 4a done (shared system); 4b + årsregnskap pkg pending | ◑ 4a done (shared system); 4b + skattemelding resource pending |
+| 5. Tenor test subjects | ☑ FLINK SYMPATISK TIGER AS (311093363) | ◑ reuse / pick as needed | ◑ reuse / pick as needed |
 | 6. Accepted test submission | ☐ | ☐ | ☐ |
 | 7. `authority_permissions` recorded | ☐ | ☐ | ☐ |
 | 8. `authority_test_runs` accepted | ☐ | ☐ | ☐ |
