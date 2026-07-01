@@ -307,17 +307,28 @@ system that bundles all three across fullmaktsområder.
       **Tenor test AS** (Step 5) — vendor-initiated `/vendor` request is closest to Talli's real owner
       flow (the owner approves a `confirmUrl`); user-initiated portal is a simpler fallback for a first pass.
 
-> ✅ **4b request created 2026-07-01 (live TT02).** `POST .../systemuser/request/vendor` with a
-> `systemuser.request.write` token → **HTTP 201**, `status: "New"`, for customer **FLINK SYMPATISK
-> TIGER AS** (org **311093363**, a Tenor synthetic AS tagged `testinnsendingSkattEnhet`):
+> ✅ **4b DONE 2026-07-01 (live TT02) — systembruker created & ACCEPTED.**
+> `POST .../systemuser/request/vendor` with a `systemuser.request.write` token → **HTTP 201**,
+> `status: "New"`, for customer **FLINK SYMPATISK TIGER AS** (org **311093363**, a Tenor synthetic AS
+> tagged `testinnsendingSkattEnhet`):
 > - `id` (request id): `fa273092-21af-4856-96d3-c95d1f3f0efe`
 > - `externalRef`: `talli_rf1086_311093363`
 > - `confirmUrl`: `https://am.ui.tt02.altinn.no/accessmanagement/ui/systemuser/request?id=fa273092-21af-4856-96d3-c95d1f3f0efe&DONTCHOOSEREPORTEE=true`
 >
-> **Awaiting approval:** a role-holder for org 311093363 (daglig leder / hovedadministrator) must open
-> the `confirmUrl`, log into Altinn TT02 via **TestID** (synthetic person), and approve → status flips
-> `New → Accepted` and the systembruker is created. Then `GET .../systemuser/vendor/byquery` returns the
-> systembruker UUID. Created via `/tmp/talli-systemuser-request.py 311093363`.
+> **Approved & verified:** the org's **styrets leder** (synthetic fnr `09856297192`) approved the
+> `confirmUrl` in Altinn TT02 → request `GET .../systemuser/request/vendor/byexternalref/930835978_talli/311093363/talli_rf1086_311093363`
+> now returns **`status: "Accepted"`**. The approval page ("Gi tilgang til system") showed *Talli ber om
+> godkjenning … Innrapportering av Aksjonærregisteroppgaven (Skatteetaten)* for Flink Sympatisk Tiger AS.
+>
+> ⚠️ **Approval-page loop gotcha (solved):** the `confirmUrl` page reload-loops when the approver is
+> logged in at `idporten-loa-substantial`. **Fix: log in via "TestID på nivå høyt"** (idporten-loa-high),
+> ideally in a fresh Incognito window — the page then renders and approves normally.
+>
+> ⏭️ **Minor open item:** `GET .../systemuser/vendor/byquery?system-id=930835978_talli&orgno=311093363`
+> (hyphen params + `systemuser.request.write` scope) returns **404** so far — the systembruker UUID isn't
+> retrievable via byquery yet (indexing/endpoint detail). **Not blocking:** the Maskinporten token's
+> `authorization_details` (`type urn:altinn:systemuser`, `systemuser_org.ID 0192:311093363`) resolves the
+> systembruker automatically without the UUID. Created via `/tmp/talli-systemuser-request.py 311093363`.
 
 > Sources: Altinn systemuserrequest guide + API reference
 > (`docs.altinn.studio/nb/authorization/guides/system-vendor/system-user/systemuserrequest/`,
@@ -507,7 +518,7 @@ credentials and the admin/step-up flow, so they are performed in the running app
 | 1. Operating entity registered (ENK, org nr) | ☑ | ☑ | ☑ |
 | 2. Virksomhetssertifikat (test self-signed) | ☑ | ☑ | ☑ |
 | 3. Maskinporten client + scope | ◑ client+key done; scope `Tilgang mangler` | ◑ | ◑ |
-| 4. Altinn system user + access pkg | ◑ **4a DONE**; **4b request created** (`fa273092-…`, status New) for Tenor AS 311093363 — awaiting customer approval | ◑ 4a done (shared system); 4b + årsregnskap pkg pending | ◑ 4a done (shared system); 4b + skattemelding resource pending |
+| 4. Altinn system user + access pkg | ☑ **DONE** — 4a system registered + 4b systembruker **Accepted** (Talli↔Flink Sympatisk Tiger AS 311093363) | ◑ 4a done (shared system); 4b + årsregnskap pkg pending | ◑ 4a done (shared system); 4b + skattemelding resource pending |
 | 5. Tenor test subjects | ☑ FLINK SYMPATISK TIGER AS (311093363) | ◑ reuse / pick as needed | ◑ reuse / pick as needed |
 | 6. Accepted test submission | ☐ | ☐ | ☐ |
 | 7. `authority_permissions` recorded | ☐ | ☐ | ☐ |
@@ -519,12 +530,14 @@ Step 3 status (2026-06-30): one shared TT02 client `7166e743-978e-4a60-8a2d-0a5c
 Maskinporten signing smoke-test passed (auth OK, only scope grant missing). See the "Live state"
 block under Step 3.
 
-Step 4 status (2026-07-01): **4a DONE** — `systemregister.write` grant went live, a token minted
-(HTTP 200), and the systemregister payload POSTed successfully → system **`930835978_talli`**
-registered in TT02 (GET confirms `rights` = RF-1086 resource, `clientId` = the Step-3 client,
-`isVisible: true`). Remaining for 4b: (a) add `systemuser.request.write`/`.read` to the client in
-the Digdir portal (granted to the org but MP-200 until on the client), and (b) a Tenor test AS
-(Step 5) to be the customer `partyOrgNo`. RF-1086 token confirmed to use `authorization_details`
+Step 4 status (2026-07-01): **DONE end-to-end.** 4a — `systemregister.write` token minted (HTTP 200)
+and the systemregister payload POSTed → system **`930835978_talli`** registered in TT02 (GET confirms
+`rights` = RF-1086 resource, `clientId` = the Step-3 client, `isVisible: true`). 4b — vendor request
+`POST /systemuser/request/vendor` (HTTP 201) for **Flink Sympatisk Tiger AS** (311093363), approved by
+its styrets leder (synthetic fnr `09856297192`) in Altinn TT02 → **`status: Accepted`** (verified via
+`byexternalref`). Approval-page loop solved by logging in at **idporten-loa-high** ("TestID på nivå
+høyt"). Minor open item: `byquery` for the systembruker UUID returns 404 (non-blocking — the token's
+`authorization_details` auto-resolves the systembruker). The RF-1086 token uses `authorization_details`
 type `urn:altinn:systemuser` against the SKD API directly (no Altinn exchange).
 
 Steps 1–5 are shared and only need to be done once; the per-obligation columns diverge from
